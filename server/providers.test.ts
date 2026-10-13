@@ -39,6 +39,22 @@ describe("account providers", () => {
   });
 });
 
+describe("switched-off providers", () => {
+  const entries = [
+    { provider: "pi", source: "builtin", label: "Pi", enabled: true },
+    { provider: "omp", source: "builtin", label: "Oh My Pi", enabled: false },
+    { provider: "codex", source: "builtin", label: "Codex", enabled: false },
+  ];
+
+  it("are left out, as in Paseo's own list", () => {
+    expect(listBaseProviders(entries, new Set(), () => false).map((base) => base.id)).toEqual(["pi"]);
+  });
+
+  it("stay while they still have accounts, so those can be managed", () => {
+    expect(listBaseProviders(entries, new Set(), () => false, new Set(["codex"])).map((base) => base.id)).toEqual(["pi", "codex"]);
+  });
+});
+
 describe("profiles", () => {
   const mine: Profile = { id: "p1", name: "review", provider: "claude", model: "sonnet" };
 

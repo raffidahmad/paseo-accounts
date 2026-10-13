@@ -316,7 +316,8 @@ export class Service {
     try {
       const { entries } = await paseo.providers.snapshot();
       const managed = new Set(state.accounts.filter((account) => account.kind === "managed").map((account) => account.id));
-      bases = listBaseProviders(entries, managed, (id) => id in this.adapters);
+      const withAccounts = new Set(state.accounts.map((account) => account.base));
+      bases = listBaseProviders(entries, managed, (id) => id in this.adapters, withAccounts);
     } catch (error) {
       log("could not list Paseo's providers", error);
       bases = Object.keys(this.adapters).map((id) => ({ id, label: this.baseLabel(id), managedLogin: true }));

@@ -47,16 +47,20 @@ export function accountProviderEntry(input: {
 }
 
 /**
- * Built-in providers that can have extra accounts. Providers Paseo reports as custom are skipped:
- * they are accounts (or the user's own profiles), not something to extend again.
+ * Built-in providers that can have extra accounts: the ones Paseo has and the user hasn't switched
+ * off. A switched-off provider stays listed only while it still has accounts here, so they can be
+ * managed. Providers Paseo reports as custom are skipped: they are accounts (or the user's own
+ * profiles), not something to extend again.
  */
 export function listBaseProviders(
-  entries: ReadonlyArray<{ provider: string; source?: string; label?: string }>,
+  entries: ReadonlyArray<{ provider: string; source?: string; label?: string; enabled?: boolean }>,
   managed: ReadonlySet<string>,
   hasAdapter: (provider: string) => boolean,
+  withAccounts: ReadonlySet<string> = new Set(),
 ): BaseProvider[] {
   return entries
     .filter((entry) => entry.source !== "custom" && !managed.has(entry.provider))
+    .filter((entry) => entry.enabled !== false || withAccounts.has(entry.provider))
     .map((entry) => ({ id: entry.provider, label: entry.label?.trim() || entry.provider, managedLogin: hasAdapter(entry.provider) }));
 }
 
