@@ -34,7 +34,7 @@ export const cancelLogin = defineRpc({
 
 /** An account on a provider without managed sign-in: a name plus the environment it runs with. */
 export const addEnvAccount = defineRpc({
-  name: "paseo-accounts.accounts.addEnv",
+  name: "paseo-accounts.accounts.add-env",
   input: z.object({
     base: z.string(),
     label: z.string().trim().min(1).max(40),
