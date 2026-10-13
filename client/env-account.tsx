@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import type { BaseProvider } from "../shared/model";
 import { addEnvAccount } from "../shared/rpc";
-import { describe, type ZeroSubStore } from "./store";
+import { describe, type AccountsStore } from "./store";
 import { Button, useText } from "./ui";
 
 type Theme = PluginSurfaceProps["theme"];
@@ -30,7 +30,7 @@ export function EnvAccountModal({
   onClose,
 }: {
   theme: Theme;
-  store: ZeroSubStore;
+  store: AccountsStore;
   base: BaseProvider;
   onClose(): void;
 }) {
@@ -75,7 +75,7 @@ export function EnvAccountModal({
     <Modal title={`Add ${base.label} account`} open onOpenChange={(open) => (open ? undefined : onClose())}>
       <Modal.Content>
         <Text style={text.muted}>
-          ZeroSub can't sign in to {base.label} for you, so this account is a name plus the environment variables it runs with, such
+          Paseo Accounts can't sign in to {base.label} for you, so this account is a name plus the environment variables it runs with, such
           as an API key or a separate config folder. It becomes its own provider in Paseo.
         </Text>
         <TextInput

@@ -5,7 +5,7 @@ import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { formatPlan } from "../shared/format";
 import type { BaseProvider, LoginMethod, LoginView } from "../shared/model";
 import { cancelLogin, startLogin, submitLoginCode } from "../shared/rpc";
-import { describe, useStore, type ZeroSubStore } from "./store";
+import { describe, useStore, type AccountsStore } from "./store";
 import { Button, useText } from "./ui";
 
 type Theme = PluginSurfaceProps["theme"];
@@ -25,7 +25,7 @@ export function AddAccountModal({
   host: PluginSurfaceProps["host"];
   /** The app knows several hosts, so say which one gets the account. */
   multiHost: boolean;
-  store: ZeroSubStore;
+  store: AccountsStore;
   base: BaseProvider;
   accountId?: string;
   onClose(): void;
@@ -187,7 +187,7 @@ function SignInSteps({
   onSwitch,
 }: {
   theme: Theme;
-  store: ZeroSubStore;
+  store: AccountsStore;
   login: LoginView;
   base: BaseProvider;
   method: LoginMethod;

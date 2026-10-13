@@ -1,8 +1,9 @@
 {
-  "name": "@kapybara/zerosub",
+  "name": "@kapybara/paseo-accounts",
   "version": "2.0.0",
-  "description": "ZeroSub: add more accounts to any Paseo provider. Each account becomes its own provider (and profile), with in-app sign-in and usage for Claude and ChatGPT (Codex).",
+  "description": "Paseo Accounts (formerly ZeroSub): add more accounts to any Paseo provider. Each account becomes its own provider (and profile), with in-app sign-in and usage for Claude and ChatGPT (Codex).",
   "keywords": [
+    "zerosub",
     "paseo",
     "paseo-plugin",
     "claude",
@@ -14,13 +15,13 @@
     "profiles",
     "subscriptions"
   ],
-  "homepage": "https://github.com/kapybara-org/zerosub#readme",
+  "homepage": "https://github.com/raffidahmad/paseo-accounts#readme",
   "bugs": {
-    "url": "https://github.com/kapybara-org/zerosub/issues"
+    "url": "https://github.com/raffidahmad/paseo-accounts/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kapybara-org/zerosub.git"
+    "url": "git+https://github.com/raffidahmad/paseo-accounts.git"
   },
   "license": "MIT",
   "author": "Kapybara",

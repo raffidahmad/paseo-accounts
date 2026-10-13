@@ -20,7 +20,7 @@ export interface ProviderEntry {
 }
 
 /** Marks profiles this plugin made, so it only ever removes its own. */
-export const PROFILE_NOTE = "Added by ZeroSub.";
+export const PROFILE_NOTE = "Added by Paseo Accounts.";
 
 /** The provider ID of an added account: the base ID plus the account's short ID, never a built-in's. */
 export function accountProviderId(base: string, shortId: string): string {
@@ -61,7 +61,7 @@ export function listBaseProviders(
 }
 
 export function profileId(providerId: string): string {
-  return `zerosub-${providerId}`;
+  return `paseo-accounts-${providerId}`;
 }
 
 /** Adds the account's profile unless one for that provider already exists (including the user's own). */
@@ -120,7 +120,7 @@ export class ConfigSync {
   }
 }
 
-/** The account view fields that come from Paseo's config rather than ZeroSub's registry. */
+/** The account view fields that come from Paseo's config rather than the plugin's registry. */
 export function configFacts(
   accountId: string,
   providers: Record<string, Record<string, unknown>>,

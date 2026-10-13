@@ -9,12 +9,12 @@ import { preferences } from "../shared/preferences";
 import { removeAccount, renameAccount, setAccountProfile } from "../shared/rpc";
 import { AddAccountModal } from "./add-account";
 import { EnvAccountModal } from "./env-account";
-import { describe, useStore, VISIBLE_POLL_MS, type ZeroSubStore } from "./store";
+import { describe, useStore, VISIBLE_POLL_MS, type AccountsStore } from "./store";
 import { Badge, Button, Card, IconButton, UsageBar, useText } from "./ui";
 
 type Theme = PluginSurfaceProps["theme"];
 
-export function AccountsSurface(props: PluginSurfaceProps & { store: ZeroSubStore }) {
+export function AccountsSurface(props: PluginSurfaceProps & { store: AccountsStore }) {
   const { theme, layout, host, store } = props;
   const { state, error } = useStore(store);
   const text = useText(theme);
@@ -48,7 +48,7 @@ export function AccountsSurface(props: PluginSurfaceProps & { store: ZeroSubStor
         }}
       >
         <View style={{ gap: 6 }}>
-          <Text style={[text.small, { fontWeight: "600", letterSpacing: 0.4 }]}>ZeroSub</Text>
+          <Text style={[text.small, { fontWeight: "600", letterSpacing: 0.4 }]}>Paseo Accounts</Text>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
             <Text style={text.title} accessibilityRole="header">
               Provider accounts
@@ -159,7 +159,7 @@ function HostScope({ theme, label }: { theme: Theme; label: string }) {
         <Text style={text.strong}>Accounts on {label}</Text>
         <Text style={text.small}>
           Only agents on this host use them. Each host keeps its own accounts and settings, so sign in on
-          each host you use. Switch hosts with the host picker at the top; a host shows up there once ZeroSub
+          each host you use. Switch hosts with the host picker at the top; a host shows up there once Paseo Accounts
           is installed on it.
         </Text>
       </View>
@@ -180,7 +180,7 @@ function ProviderSection({
   accounts: AccountView[];
   theme: Theme;
   compact: boolean;
-  store: ZeroSubStore;
+  store: AccountsStore;
   onAdd(): void;
   onSignIn(account: AccountView): void;
 }) {
@@ -222,7 +222,7 @@ function AccountCard({
 }: {
   account: AccountView;
   theme: Theme;
-  store: ZeroSubStore;
+  store: AccountsStore;
   onSignIn(): void;
 }) {
   const text = useText(theme);
@@ -408,7 +408,7 @@ function RenameModal({
 }: {
   theme: Theme;
   account: AccountView;
-  store: ZeroSubStore;
+  store: AccountsStore;
   onClose(): void;
 }) {
   const text = useText(theme);

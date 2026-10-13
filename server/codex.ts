@@ -54,7 +54,7 @@ class AppServer {
     try {
       await server.request(
         "initialize",
-        { clientInfo: { name: CLIENT_NAME, title: "Paseo ZeroSub", version: "1.2.1" }, capabilities: { experimentalApi: false } },
+        { clientInfo: { name: CLIENT_NAME, title: "Paseo Accounts", version: "2.0.0" }, capabilities: { experimentalApi: false } },
         60_000,
       );
       server.send({ method: "initialized" });
@@ -130,7 +130,7 @@ class AppServer {
   private dispatch(message: Json): void {
     const id = typeof message.id === "number" ? message.id : null;
     if (id !== null && typeof message.method === "string") {
-      // A request from the server (e.g. external token refresh); ZeroSub never uses external auth.
+      // A request from the server (e.g. external token refresh); Paseo Accounts never uses external auth.
       this.send({ id, error: { code: -32601, message: "Not supported" } });
       return;
     }

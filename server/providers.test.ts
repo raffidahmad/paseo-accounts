@@ -45,7 +45,7 @@ describe("profiles", () => {
   it("adds one profile per account and never duplicates", () => {
     const added = withProfile([mine], "claude-ab12", "Claude · work");
     expect(added).toHaveLength(2);
-    expect(added[1]).toMatchObject({ id: "zerosub-claude-ab12", name: "Claude · work", provider: "claude-ab12" });
+    expect(added[1]).toMatchObject({ id: "paseo-accounts-claude-ab12", name: "Claude · work", provider: "claude-ab12" });
     expect(withProfile(added, "claude-ab12", "Other")).toHaveLength(2);
   });
 

@@ -193,7 +193,7 @@ export class Service {
       const wanted = accountProviderEntry({ base: account.base, baseLabel: this.baseLabel(account.base), label: account.label, env });
       if (!existing) {
         await this.config.upsertProvider(paseo, account.id, wanted);
-        console.log(`[ZeroSub] restored the provider for ${account.label}`);
+        console.log(`[paseo-accounts] restored the provider for ${account.label}`);
       } else if (JSON.stringify(existing.env ?? {}) !== JSON.stringify(env)) {
         await this.config.upsertProvider(paseo, account.id, { ...wanted, label: typeof existing.label === "string" ? existing.label : wanted.label });
       }
@@ -421,7 +421,7 @@ export class Service {
     );
   }
 
-  /** Signs a home out and deletes it. Only ever called for a home ZeroSub made and nothing uses. */
+  /** Signs a home out and deletes it. Only ever called for a home Paseo Accounts made and nothing uses. */
   private async discardHome(base: string, home: string): Promise<void> {
     await this.adapters[base]?.logout(home).catch((error: unknown) => log(`signing out ${home} failed`, error));
     await removeHome(home).catch((error: unknown) => log(`could not delete ${home}`, error));
@@ -639,7 +639,7 @@ export function suggestLabel(account: StoredAccount, state: StoredState, baseLab
 }
 
 function log(message: string, error: unknown): void {
-  console.error(`[ZeroSub] ${message}`, describe(error));
+  console.error(`[paseo-accounts] ${message}`, describe(error));
 }
 
 export function describe(error: unknown): string {

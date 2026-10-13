@@ -3,13 +3,13 @@ import { z } from "zod";
 import { LoginMethodSchema, LoginViewSchema, StateViewSchema } from "./model";
 
 export const getState = defineRpc({
-  name: "zerosub.state",
+  name: "paseo-accounts.state",
   input: z.object({ refreshUsage: z.boolean().optional() }),
   output: StateViewSchema,
 });
 
 export const startLogin = defineRpc({
-  name: "zerosub.login.start",
+  name: "paseo-accounts.login.start",
   input: z.object({
     /** The built-in provider to add an account to. */
     base: z.string(),
@@ -21,20 +21,20 @@ export const startLogin = defineRpc({
 });
 
 export const submitLoginCode = defineRpc({
-  name: "zerosub.login.code",
+  name: "paseo-accounts.login.code",
   input: z.object({ loginId: z.string(), code: z.string().trim().min(1) }),
   output: LoginViewSchema,
 });
 
 export const cancelLogin = defineRpc({
-  name: "zerosub.login.cancel",
+  name: "paseo-accounts.login.cancel",
   input: z.object({ loginId: z.string() }),
   output: LoginViewSchema.nullable(),
 });
 
 /** An account on a provider without managed sign-in: a name plus the environment it runs with. */
 export const addEnvAccount = defineRpc({
-  name: "zerosub.accounts.addEnv",
+  name: "paseo-accounts.accounts.addEnv",
   input: z.object({
     base: z.string(),
     label: z.string().trim().min(1).max(40),
@@ -44,20 +44,20 @@ export const addEnvAccount = defineRpc({
 });
 
 export const renameAccount = defineRpc({
-  name: "zerosub.accounts.rename",
+  name: "paseo-accounts.accounts.rename",
   input: z.object({ accountId: z.string(), label: z.string().trim().min(1).max(40) }),
   output: z.object({ ok: z.literal(true) }),
 });
 
 export const removeAccount = defineRpc({
-  name: "zerosub.accounts.remove",
+  name: "paseo-accounts.accounts.remove",
   input: z.object({ accountId: z.string() }),
   output: z.object({ ok: z.literal(true) }),
 });
 
 /** Adds or removes the Paseo profile that starts agents on an account. */
 export const setAccountProfile = defineRpc({
-  name: "zerosub.accounts.profile",
+  name: "paseo-accounts.accounts.profile",
   input: z.object({ accountId: z.string(), enabled: z.boolean() }),
   output: z.object({ ok: z.literal(true) }),
 });

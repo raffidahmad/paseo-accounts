@@ -51,7 +51,7 @@ async function syncOverlay(home: string, spec: OverlaySpec): Promise<void> {
     try {
       await symlink(target, link, process.platform === "win32" && targetStat.isDirectory() ? "junction" : undefined);
     } catch (error) {
-      console.warn(`[ZeroSub] could not share ${name} with ${home}`, error instanceof Error ? error.message : error);
+      console.warn(`[paseo-accounts] could not share ${name} with ${home}`, error instanceof Error ? error.message : error);
     }
   }
 
@@ -65,7 +65,7 @@ async function syncOverlay(home: string, spec: OverlaySpec): Promise<void> {
 
 /**
  * Deletes a managed home. Its top level holds symlinks into the user's real CLI home, so those are
- * unlinked first; nothing outside ZeroSub's own directory is ever followed or removed.
+ * unlinked first; nothing outside the plugin's own directory is ever followed or removed.
  */
 export async function removeHome(home: string): Promise<void> {
   if (!home.startsWith(homesDir() + sep)) return;
@@ -215,7 +215,7 @@ async function readJsonObject(path: string): Promise<Record<string, unknown> | n
 }
 
 async function writeJsonAtomically(path: string, value: unknown): Promise<void> {
-  const temporary = `${path}.zerosub.${randomBytes(4).toString("hex")}.tmp`;
+  const temporary = `${path}.paseo-accounts.${randomBytes(4).toString("hex")}.tmp`;
   await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
   await rename(temporary, path);
 }

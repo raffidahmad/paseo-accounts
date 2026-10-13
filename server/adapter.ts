@@ -33,12 +33,12 @@ export interface LoginHandle {
 
 /**
  * Environment changes for a process run against an account. `null` means "inherit the daemon's
- * value": the key is left out of the account's provider env, and untouched for processes ZeroSub spawns.
+ * value": the key is left out of the account's provider env, and untouched for processes Paseo Accounts spawns.
  */
 export type EnvPatch = Record<string, string | null>;
 
 /**
- * What ZeroSub adds on top of a Paseo provider that has no support of its own: an isolated
+ * What Paseo Accounts adds on top of a Paseo provider that has no support of its own: an isolated
  * credential home, sign-in, and usage. Paseo already runs the agent and lists its models, so a
  * provider with no adapter still gets accounts — just env-only ones.
  */
@@ -62,7 +62,7 @@ export interface ProviderAdapter {
   logout(home: string): Promise<void>;
 }
 
-/** The environment for a process ZeroSub spawns against `patch`. */
+/** The environment for a process Paseo Accounts spawns against `patch`. */
 export function spawnEnv(patch: EnvPatch): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
   for (const [key, value] of Object.entries(patch)) if (value !== null) env[key] = value;

@@ -6,9 +6,9 @@ export function paseoHome(): string {
   return configured ? resolve(configured) : join(homedir(), ".paseo");
 }
 
-/** Everything ZeroSub writes lives here: its registry and the per-account credential homes. */
+/** Everything Paseo Accounts writes lives here: its registry and the per-account credential homes. */
 export function dataDir(): string {
-  return join(paseoHome(), "zerosub");
+  return join(paseoHome(), "paseo-accounts");
 }
 
 export function statePath(): string {

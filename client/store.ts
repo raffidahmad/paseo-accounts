@@ -19,7 +19,7 @@ export interface StoreSnapshot {
  * One poller per installation feeds the surface, composer pills and commands.
  * Polling is cheap: the daemon answers from memory and refreshes usage on its own schedule.
  */
-export class ZeroSubStore {
+export class AccountsStore {
   private snapshot: StoreSnapshot = { state: null, error: null };
   private readonly listeners = new Set<() => void>();
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -134,6 +134,6 @@ export function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function useStore(store: ZeroSubStore): StoreSnapshot {
+export function useStore(store: AccountsStore): StoreSnapshot {
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
 }

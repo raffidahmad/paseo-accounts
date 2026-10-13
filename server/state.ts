@@ -5,7 +5,7 @@ import { Mutex, readJson, writeJsonAtomic } from "./json-file";
 import { statePath } from "./paths";
 
 /**
- * An account ZeroSub added. It is also a provider entry in Paseo's config (`providers.<id>`), which
+ * An account Paseo Accounts added. It is also a provider entry in Paseo's config (`providers.<id>`), which
  * is the source of truth for the label and environment; this registry holds what Paseo can't:
  * the credential home and the identity learned from signing in.
  */
@@ -104,7 +104,7 @@ export class StateStore {
   private async backup(why: string): Promise<void> {
     const copy = `${this.path}.bad-${Date.now()}`;
     await copyFile(this.path, copy).catch(() => undefined);
-    console.error(`[ZeroSub] state file was ${why}; kept a copy at ${copy} and continued with what was readable`);
+    console.error(`[paseo-accounts] state file was ${why}; kept a copy at ${copy} and continued with what was readable`);
   }
 }
 

@@ -7,7 +7,7 @@ import { StateStore, salvageState } from "./state";
 let dir: string;
 
 beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), "zerosub-state-"));
+  dir = await mkdtemp(join(tmpdir(), "paseo-accounts-state-"));
 });
 
 afterEach(async () => {

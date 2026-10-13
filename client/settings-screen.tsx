@@ -3,7 +3,7 @@ import { SettingsAction, SettingsCard, SettingsSection, SettingsSwitch } from "@
 import { Text } from "react-native";
 import { preferences } from "../shared/preferences";
 
-/** Settings → Plugins → zerosub. Accounts themselves live in the sidebar surface. */
+/** Settings → Plugins → paseo-accounts. Accounts themselves live in the sidebar surface. */
 export function PreferencesScreen({ theme, host, onOpenAccounts }: PluginSurfaceProps & { onOpenAccounts(): void }) {
   const settings = useSettings(preferences);
   const multiHost = useHosts().length > 1;

@@ -49,13 +49,13 @@ export function browserCaptureScript(): Promise<string | null> {
       await mkdir(directory, { recursive: true, mode: 0o700 });
       await writeFile(
         path,
-        '#!/bin/sh\n[ -n "$ZEROSUB_BROWSER_OUT" ] && printf \'%s\\n\' "$1" > "$ZEROSUB_BROWSER_OUT"\nexit 0\n',
+        '#!/bin/sh\n[ -n "$PASEO_ACCOUNTS_BROWSER_OUT" ] && printf \'%s\\n\' "$1" > "$PASEO_ACCOUNTS_BROWSER_OUT"\nexit 0\n',
         { mode: 0o700 },
       );
       await chmod(path, 0o700);
       return path;
     } catch (error) {
-      console.warn("[ZeroSub] could not create the browser shim", error instanceof Error ? error.message : error);
+      console.warn("[paseo-accounts] could not create the browser shim", error instanceof Error ? error.message : error);
       return null;
     }
   })();

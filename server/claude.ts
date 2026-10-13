@@ -124,7 +124,7 @@ export class ClaudeAdapter implements ProviderAdapter {
 
   /**
    * Has Claude Code itself refresh an expired sign-in: `claude -p /usage` runs locally (no model
-   * call, no cost) and fetches usage with Claude Code's own refresh-and-lock logic. ZeroSub never
+   * call, no cost) and fetches usage with Claude Code's own refresh-and-lock logic. Paseo Accounts never
    * refreshes tokens itself, so two refreshers can't race and burn a single-use refresh token.
    */
   private renewLogin(home: string | null): Promise<Credentials | null> {
@@ -148,11 +148,11 @@ export class ClaudeAdapter implements ProviderAdapter {
   async login(home: string | null, _method: LoginMethod): Promise<LoginHandle> {
     const { command, prefix } = await providerCommand("claude");
     const shim = await browserCaptureScript();
-    const capture = join(tmpdir(), `zerosub-login-${randomBytes(6).toString("hex")}.url`);
+    const capture = join(tmpdir(), `paseo-accounts-login-${randomBytes(6).toString("hex")}.url`);
     const env = spawnEnv(await this.env(home));
     if (shim) {
       env.BROWSER = shim;
-      env.ZEROSUB_BROWSER_OUT = capture;
+      env.PASEO_ACCOUNTS_BROWSER_OUT = capture;
     }
     return new ClaudeLogin(command, [...prefix, "auth", "login", "--claudeai"], env, shim ? capture : null);
   }
@@ -230,7 +230,7 @@ class ClaudeLogin extends ProgressEmitter implements LoginHandle {
     let value = code.trim().replace(/\s+/g, "");
     if (!value) throw new Error("Paste the code from the sign-in page.");
     // The CLI only checks that a `#state` suffix is present; the exchange uses the flow's own state.
-    if (!value.includes("#")) value = `${value}#zerosub`;
+    if (!value.includes("#")) value = `${value}#paseo-accounts`;
     if (this.exited) throw new Error("This sign-in has ended. Start again.");
     this.update({ message: "Checking the code…" });
     this.child.stdin.write(`${value}\n`);

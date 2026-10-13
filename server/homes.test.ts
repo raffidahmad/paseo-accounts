@@ -12,7 +12,7 @@ const saved = {
 };
 
 beforeEach(async () => {
-  root = await realpath(await mkdtemp(join(tmpdir(), "zerosub-homes-")));
+  root = await realpath(await mkdtemp(join(tmpdir(), "paseo-accounts-homes-")));
 });
 
 afterEach(async () => {
@@ -159,7 +159,7 @@ describe("removeHome", () => {
   it("deletes the home without touching what its links point at", async () => {
     process.env.PASEO_HOME = root;
     const main = join(root, "main");
-    const home = join(root, "zerosub", "homes", "claude-x");
+    const home = join(root, "paseo-accounts", "homes", "claude-x");
     await mkdir(join(main, "projects"), { recursive: true });
     await writeFile(join(main, "projects", "conversation.jsonl"), "keep");
     await mkdir(home, { recursive: true });
@@ -172,7 +172,7 @@ describe("removeHome", () => {
     expect(await readFile(join(main, "projects", "conversation.jsonl"), "utf8")).toBe("keep");
   });
 
-  it("refuses anything outside zerosub's homes directory", async () => {
+  it("refuses anything outside the plugin's homes directory", async () => {
     process.env.PASEO_HOME = root;
     const outside = join(root, "elsewhere");
     await mkdir(outside, { recursive: true });

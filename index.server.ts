@@ -23,10 +23,10 @@ export default function contribute(server: PluginServerContext) {
   const applySettings = (state: PluginSettingsState<typeof preferences.schema>) => {
     if (state.status === "ready") service.setPreferences(state.values);
   };
-  void settings.read().then(applySettings, (error: unknown) => console.error("[ZeroSub] could not read preferences", describe(error)));
+  void settings.read().then(applySettings, (error: unknown) => console.error("[paseo-accounts] could not read preferences", describe(error)));
   const stopSettings = settings.subscribe(applySettings);
 
-  void service.start().catch((error: unknown) => console.error("[ZeroSub] startup failed", describe(error)));
+  void service.start().catch((error: unknown) => console.error("[paseo-accounts] startup failed", describe(error)));
 
   // Account providers carry their own environment, so this only refreshes an account's shared files.
   // It must never break or stall a session: Paseo fails a hook after 30s.
@@ -38,7 +38,7 @@ export default function contribute(server: PluginServerContext) {
     try {
       await Promise.race([service.onSessionOpen(request, context), deadline]);
     } catch (error) {
-      console.error(`[ZeroSub] could not prepare ${request.provider} for ${request.agentId}`, describe(error));
+      console.error(`[paseo-accounts] could not prepare ${request.provider} for ${request.agentId}`, describe(error));
     } finally {
       clearTimeout(timer);
     }
