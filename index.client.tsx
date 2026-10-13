@@ -1,10 +1,10 @@
 import type { PluginClientContext } from "@getpaseo/plugin/client";
 import { AccountsSurface } from "./client/accounts-surface";
 import { PreferencesScreen } from "./client/settings-screen";
-import { AccountsStore } from "./client/store";
+import { createAccountsStore } from "./client/store";
 
 export default function contribute(client: PluginClientContext) {
-  const store = new AccountsStore(client);
+  const store = createAccountsStore(client);
   store.start();
 
   client.addSurface("accounts", (props) => <AccountsSurface {...props} store={store} />);
