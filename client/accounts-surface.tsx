@@ -4,18 +4,11 @@ import { SettingsCard, SettingsSwitch } from "@getpaseo/plugin/client/ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { accountSubtitle, formatAge, formatPlan, usageSummary } from "../shared/format";
-import { FAMILY_LABEL, type AccountView, type Family } from "../shared/model";
+import type { AccountView, BaseProvider } from "../shared/model";
 import { preferences } from "../shared/preferences";
-import {
-  clearAccountLimit,
-  removeAccount,
-  renameAccount,
-  setAccountEnabled,
-  setDefaultAccount,
-  type ReopenSummary,
-} from "../shared/rpc";
+import { removeAccount, renameAccount, setAccountProfile } from "../shared/rpc";
 import { AddAccountModal } from "./add-account";
-import { ResetConfirm, redeemToast, resetBadge } from "./reset-confirm";
+import { EnvAccountModal } from "./env-account";
 import { describe, useStore, VISIBLE_POLL_MS, type ZeroSubStore } from "./store";
 import { Badge, Button, Card, IconButton, UsageBar, useText } from "./ui";
 
@@ -25,7 +18,7 @@ export function AccountsSurface(props: PluginSurfaceProps & { store: ZeroSubStor
   const { theme, layout, host, store } = props;
   const { state, error } = useStore(store);
   const text = useText(theme);
-  const [adding, setAdding] = useState<{ family: Family; accountId?: string } | null>(null);
+  const [adding, setAdding] = useState<{ base: BaseProvider; accountId?: string } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const refreshUsage = useCallback(async () => {
     setRefreshing(true);
@@ -43,7 +36,6 @@ export function AccountsSurface(props: PluginSurfaceProps & { store: ZeroSubStor
   // Keep usage moving while the screen is open.
   useEffect(() => store.watch(VISIBLE_POLL_MS), [store]);
 
-  const families: Family[] = ["claude", "codex"];
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.surface0 }}>
       <ScrollView
@@ -59,7 +51,7 @@ export function AccountsSurface(props: PluginSurfaceProps & { store: ZeroSubStor
           <Text style={[text.small, { fontWeight: "600", letterSpacing: 0.4 }]}>ZeroSub</Text>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
             <Text style={text.title} accessibilityRole="header">
-              Subscription accounts
+              Provider accounts
             </Text>
             {state ? (
               <IconButton
@@ -74,8 +66,8 @@ export function AccountsSurface(props: PluginSurfaceProps & { store: ZeroSubStor
             ) : null}
           </View>
           <Text style={text.muted}>
-            Keep several Claude and ChatGPT accounts signed in. Each agent uses one; when an account
-            hits its limit, agents move to another and keep going.
+            Add more accounts to any provider. Each one becomes its own provider in Paseo, so you choose the account and its models
+            when you start a chat, or start from its profile.
           </Text>
         </View>
 
@@ -110,34 +102,37 @@ export function AccountsSurface(props: PluginSurfaceProps & { store: ZeroSubStor
         {!state && !error ? <Text style={text.muted}>Loading accounts…</Text> : null}
 
         {state
-          ? families.map((family) => (
-              <FamilySection
-                key={family}
-                family={family}
-                accounts={state.accounts.filter((account) => account.family === family)}
+          ? state.bases.map((base) => (
+              <ProviderSection
+                key={base.id}
+                base={base}
+                accounts={state.accounts.filter((account) => account.base === base.id)}
                 theme={theme}
                 compact={layout.compact}
                 store={store}
-                onAdd={() => setAdding({ family })}
-                onSignIn={(account) => setAdding({ family, accountId: account.id })}
+                onAdd={() => setAdding({ base })}
+                onSignIn={(account) => setAdding({ base, accountId: account.id })}
               />
             ))
           : null}
 
-        <AutomationSettings theme={theme} />
+        <ProfileSetting theme={theme} />
       </ScrollView>
 
-      {adding ? (
+      {adding && adding.base.managedLogin ? (
         <AddAccountModal
           theme={theme}
           layout={layout}
           host={host}
           multiHost={multiHost}
           store={store}
-          family={adding.family}
+          base={adding.base}
           accountId={adding.accountId}
           onClose={() => setAdding(null)}
         />
+      ) : null}
+      {adding && !adding.base.managedLogin ? (
+        <EnvAccountModal theme={theme} store={store} base={adding.base} onClose={() => setAdding(null)} />
       ) : null}
     </View>
   );
@@ -172,8 +167,8 @@ function HostScope({ theme, label }: { theme: Theme; label: string }) {
   );
 }
 
-function FamilySection({
-  family,
+function ProviderSection({
+  base,
   accounts,
   theme,
   compact,
@@ -181,7 +176,7 @@ function FamilySection({
   onAdd,
   onSignIn,
 }: {
-  family: Family;
+  base: BaseProvider;
   accounts: AccountView[];
   theme: Theme;
   compact: boolean;
@@ -194,31 +189,23 @@ function FamilySection({
     <View style={{ gap: 10 }}>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         <Text style={text.heading} accessibilityRole="header">
-          {family === "claude" ? "Claude" : "ChatGPT (Codex)"}
+          {base.label}
         </Text>
         <Button
           theme={theme}
           icon="Plus"
           label={compact ? "Add" : "Add account"}
-          accessibilityLabel={`Add ${FAMILY_LABEL[family]} account`}
-          tooltip={`Sign in another ${FAMILY_LABEL[family]} account`}
+          accessibilityLabel={`Add ${base.label} account`}
+          tooltip={base.managedLogin ? `Sign in another ${base.label} account` : `Add a ${base.label} account with its own environment`}
           tooltipAlign="end"
           onPress={onAdd}
         />
       </View>
-      {accounts.length === 0 ? (
-        <Text style={text.muted}>No {FAMILY_LABEL[family]} accounts yet.</Text>
-      ) : null}
+      {accounts.length === 0 ? <Text style={text.muted}>No extra {base.label} accounts yet.</Text> : null}
       {chunk(accounts, compact ? 1 : 2).map((row) => (
         <View key={row.map((account) => account.id).join()} style={{ flexDirection: "row", gap: 10 }}>
           {row.map((account) => (
-            <AccountCard
-              key={account.id}
-              account={account}
-              theme={theme}
-              store={store}
-              onSignIn={() => onSignIn(account)}
-            />
+            <AccountCard key={account.id} account={account} theme={theme} store={store} onSignIn={() => onSignIn(account)} />
           ))}
           {!compact && row.length === 1 ? <View style={{ flex: 1 }} /> : null}
         </View>
@@ -240,59 +227,26 @@ function AccountCard({
 }) {
   const text = useText(theme);
   const toast = useToast();
-  const [busy, setBusy] = useState<"default" | "remove" | "clear" | "toggle" | null>(null);
+  const [busy, setBusy] = useState<"remove" | "profile" | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
-  const [confirmReset, setConfirmReset] = useState(false);
-  const resets = account.usage?.resets ?? null;
   const plan = formatPlan(account.plan);
   const summary = usageSummary(account);
-  const subtitle = accountSubtitle(account);
+  const subtitle = accountSubtitle(account) ?? (account.envKeys.length > 0 ? account.envKeys.join(", ") : null);
   const signedOut = account.status === "signed_out";
-  const disabled = account.status === "disabled";
-  const faded = disabled ? { opacity: 0.55 } : null;
+  const faded = account.enabled ? null : { opacity: 0.55 };
   const windows = account.usage?.windows ?? [];
-  const agents = account.agentCount === 0 ? "No agents" : `${account.agentCount} agent${account.agentCount === 1 ? "" : "s"}`;
   const freshness = !signedOut && account.usage && windows.length > 0 ? `updated ${formatAge(account.usage.fetchedAt)}` : null;
 
-  // Sets the account aside for a while, or brings it back; its agents move off it and back.
-  const toggle = useCallback(async () => {
-    const enabling = account.status === "disabled";
-    setBusy("toggle");
+  // A profile starts agents on this account in one tap; Paseo lets you edit it like any other.
+  const toggleProfile = useCallback(async () => {
+    setBusy("profile");
     try {
-      const result = await store.rpc(setAccountEnabled, { accountId: account.id, enabled: enabling });
-      const message = describeReopen(`${account.label} is ${enabling ? "enabled" : "disabled"}`, result);
-      const stayed =
-        result.stayed > 0
-          ? ` · ${result.stayed} ChatGPT conversation${result.stayed === 1 ? " stays" : "s stay"} on it (they can't change accounts)`
-          : "";
-      toast.show(`${message}${stayed}`, { variant: "success", durationMs: 5_000 });
-    } catch (error) {
-      toast.error(describe(error));
-    } finally {
-      setBusy(null);
-    }
-  }, [account, store, toast]);
-
-  const makeDefault = useCallback(async () => {
-    setBusy("default");
-    try {
-      const summary = await store.rpc(setDefaultAccount, { accountId: account.id });
-      toast.show(describeReopen(`${account.label} is now the default`, summary), { variant: "success" });
+      await store.rpc(setAccountProfile, { accountId: account.id, enabled: !account.hasProfile });
       await store.refresh();
-    } catch (error) {
-      toast.error(describe(error));
-    } finally {
-      setBusy(null);
-    }
-  }, [account, store, toast]);
-
-  // For when the user knows better, e.g. after upgrading the plan or buying credits.
-  const markAvailable = useCallback(async () => {
-    setBusy("clear");
-    try {
-      await store.rpc(clearAccountLimit, { accountId: account.id });
-      toast.show(`${account.label} is available again`, { variant: "success" });
+      toast.show(account.hasProfile ? `Removed the profile for ${account.label}` : `Added a profile for ${account.label}`, {
+        variant: "success",
+      });
     } catch (error) {
       toast.error(describe(error));
     } finally {
@@ -303,13 +257,8 @@ function AccountCard({
   const remove = useCallback(async () => {
     setBusy("remove");
     try {
-      const result = await store.rpc(removeAccount, { accountId: account.id });
-      toast.show(
-        result.movedAgents > 0
-          ? `Removed ${account.label}; ${result.movedAgents} agent(s) moved to the default account`
-          : `Removed ${account.label}`,
-        { variant: "success" },
-      );
+      await store.rpc(removeAccount, { accountId: account.id });
+      toast.show(`Removed ${account.label}`, { variant: "success" });
       await store.refresh();
     } catch (error) {
       toast.error(describe(error));
@@ -336,45 +285,13 @@ function AccountCard({
           ) : null}
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 2, marginTop: -4, marginRight: -6 }}>
-          {account.status === "limited" ? (
-            <IconButton
-              theme={theme}
-              icon="CircleCheck"
-              label="Mark as available again (it has room)"
-              tooltip="Mark as available: use it again before its limit resets, e.g. after upgrading"
-              busy={busy === "clear"}
-              onPress={() => void markAvailable()}
-            />
-          ) : null}
-          {!account.isDefault && !signedOut && !disabled ? (
-            <IconButton
-              theme={theme}
-              icon="Star"
-              label="Make default"
-              tooltip="Make default: new agents start on this account"
-              busy={busy === "default"}
-              onPress={() => void makeDefault()}
-            />
-          ) : null}
-          <IconButton
-            theme={theme}
-            icon={disabled ? "CirclePlay" : "CirclePause"}
-            label={disabled ? "Enable account" : "Disable for now (agents won't use it)"}
-            tooltip={
-              disabled
-                ? "Enable: agents can use this account again"
-                : "Disable for now: agents stop using it and move to your other accounts"
-            }
-            busy={busy === "toggle"}
-            onPress={() => void toggle()}
-          />
           <IconButton theme={theme} icon="Pencil" label="Rename" tooltip="Rename this account" onPress={() => setRenaming(true)} />
           {account.kind !== "main" ? (
             <IconButton
               theme={theme}
               icon="Trash2"
               label="Remove"
-              tooltip="Remove: sign it out and delete its saved login"
+              tooltip="Remove: delete its provider and profile, and sign it out"
               tone="danger"
               busy={busy === "remove"}
               onPress={() => setConfirmRemove(true)}
@@ -384,26 +301,28 @@ function AccountCard({
       </View>
 
       <View style={[{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6 }, faded]}>
-        {account.isDefault ? <Badge theme={theme} label="Default" tone="accent" /> : null}
-        {disabled ? <Badge theme={theme} label="Disabled" /> : null}
         {plan ? <Badge theme={theme} label={plan} /> : null}
         {account.kind === "main" ? <Badge theme={theme} label="CLI login" /> : null}
+        {!account.enabled ? <Badge theme={theme} label="Off in Paseo" /> : null}
+        {account.hasProfile ? <Badge theme={theme} label="Profile" tone="accent" /> : null}
         {account.status === "limited" ? <Badge theme={theme} label="Limit reached" tone="danger" /> : null}
-        {account.status === "signed_out" ? <Badge theme={theme} label="Signed out" tone="warning" /> : null}
-        {resets && !signedOut ? <Badge theme={theme} label={resetBadge(resets)} tone="accent" /> : null}
+        {signedOut ? <Badge theme={theme} label="Signed out" tone="warning" /> : null}
       </View>
 
-      <View style={[{ gap: 10 }, faded]}>
-        {signedOut ? (
-          <Text style={text.small}>Sign in again to use this account.</Text>
-        ) : windows.length > 0 ? (
-          windows.map((limit) => <UsageBar key={limit.id} theme={theme} limit={limit} />)
-        ) : (
-          <Text style={text.small}>{account.usage?.error ?? summary ?? "Checking usage…"}</Text>
-        )}
-        {!signedOut && windows.length > 0 && account.usage?.error ? <Text style={text.small}>{account.usage.error}</Text> : null}
-        {!signedOut && resets?.blockedReason ? <Text style={text.small}>{resets.blockedReason}</Text> : null}
-      </View>
+      {account.managedLogin ? (
+        <View style={[{ gap: 10 }, faded]}>
+          {signedOut ? (
+            <Text style={text.small}>Sign in again to use this account.</Text>
+          ) : windows.length > 0 ? (
+            windows.map((limit) => <UsageBar key={limit.id} theme={theme} limit={limit} />)
+          ) : (
+            <Text style={text.small}>{account.usage?.error ?? summary ?? "Checking usage…"}</Text>
+          )}
+          {!signedOut && windows.length > 0 && account.usage?.error ? <Text style={text.small}>{account.usage.error}</Text> : null}
+        </View>
+      ) : (
+        <Text style={text.small}>Runs with the environment you gave it. Usage isn't tracked for this provider.</Text>
+      )}
 
       {/* Pinned to the bottom, so cards side by side line up however much each one shows. */}
       <View
@@ -422,7 +341,7 @@ function AccountCard({
         }}
       >
         <Text style={[text.small, { flexShrink: 1 }]} numberOfLines={1}>
-          {disabled ? "Disabled · agents won't use it" : freshness ? `${agents} · ${freshness}` : agents}
+          {freshness ?? (account.enabled ? " " : "Turned off in Paseo's providers")}
         </Text>
         {signedOut ? (
           <Button
@@ -435,59 +354,32 @@ function AccountCard({
             tooltipAlign="end"
             onPress={onSignIn}
           />
-        ) : disabled ? (
+        ) : (
           <Button
             theme={theme}
             size="small"
-            tone="primary"
-            icon="CirclePlay"
-            label="Enable"
-            tooltip="Use this account again; its agents move back to it"
+            icon={account.hasProfile ? "BookmarkMinus" : "BookmarkPlus"}
+            label={account.hasProfile ? "Remove profile" : "Add profile"}
+            tooltip={
+              account.hasProfile
+                ? "Remove this account's Paseo profile (the account stays)"
+                : "Add a Paseo profile that starts chats on this account"
+            }
             tooltipAlign="end"
-            busy={busy === "toggle"}
-            onPress={() => void toggle()}
+            busy={busy === "profile"}
+            onPress={() => void toggleProfile()}
           />
-        ) : resets ? (
-          <Button
-            theme={theme}
-            size="small"
-            tone={account.status === "limited" ? "primary" : "secondary"}
-            icon="TimerReset"
-            label="Use reset"
-            accessibilityLabel="Use a banked reset"
-            tooltip="Spend a banked reset to refill this account's limits now"
-            tooltipAlign="end"
-            disabled={!resets.usableNow}
-            onPress={() => setConfirmReset(true)}
-          />
-        ) : null}
+        )}
       </View>
-      <Modal title="Use a banked reset?" open={confirmReset} onOpenChange={setConfirmReset}>
-        <Modal.Content>
-          <ResetConfirm
-            theme={theme}
-            store={store}
-            account={account}
-            onCancel={() => setConfirmReset(false)}
-            onFinished={(result) => {
-              setConfirmReset(false);
-              const { message, variant } = redeemToast(account.label, result);
-              if (variant === "error") toast.error(message);
-              else toast.show(message, { variant, durationMs: 5_000 });
-            }}
-          />
-        </Modal.Content>
-      </Modal>
 
-      {renaming ? (
-        <RenameModal theme={theme} account={account} store={store} onClose={() => setRenaming(false)} />
-      ) : null}
+      {renaming ? <RenameModal theme={theme} account={account} store={store} onClose={() => setRenaming(false)} /> : null}
       <Modal title={`Remove ${account.label}?`} open={confirmRemove} onOpenChange={setConfirmRemove}>
         <Modal.Content>
           <Text style={text.body}>
-            {account.family === "claude"
-              ? "This signs the account out on this machine and deletes its saved login. Agents using it move to the default account; their conversations are kept."
-              : "This signs the account out on this machine and deletes its saved login. New agents use the default account. Existing ChatGPT conversations on it can't move, so start new agents for them."}
+            {account.managedLogin
+              ? "This deletes the account's provider and profiles in Paseo, signs it out on this machine and deletes its saved login."
+              : "This deletes the account's provider and profiles in Paseo, including the environment variables you gave it."}{" "}
+            Agents already running on it will stop working, so archive them first. Their conversations are kept.
           </Text>
           <View style={{ flexDirection: "row", gap: 8, justifyContent: "flex-end" }}>
             <Button theme={theme} label="Cancel" tooltip="Keep this account" tooltipAlign="end" onPress={() => setConfirmRemove(false)} />
@@ -496,7 +388,7 @@ function AccountCard({
               tone="danger"
               icon="Trash2"
               label="Remove"
-              tooltip="Sign it out and delete its saved login; its agents move to the default"
+              tooltip="Delete the provider and profile, and sign it out"
               tooltipAlign="end"
               busy={busy === "remove"}
               onPress={() => void remove()}
@@ -603,69 +495,30 @@ function Avatar({ theme, label }: { theme: Theme; label: string }) {
   );
 }
 
-function AutomationSettings({ theme }: { theme: Theme }) {
+function ProfileSetting({ theme }: { theme: Theme }) {
   const settings = useSettings(preferences);
   const text = useText(theme);
   if (settings.status === "loading") return null;
   if (settings.status !== "ready") {
     return <Text style={text.danger}>Preferences unavailable: {settings.error}</Text>;
   }
-  const save = (patch: Partial<typeof settings.values>) =>
-    void settings.save({ ...settings.values, ...patch }, settings.revision);
   return (
     <View style={{ gap: 10 }}>
       <Text style={text.heading} accessibilityRole="header">
-        Automatic switching
+        Profiles
       </Text>
       <SettingsCard>
         <SettingsSwitch
-          label="Switch accounts when one hits its limit"
-          hint="Agents move to the account with the most room left."
-          value={settings.values.autoSwitch}
+          label="Add a profile for each new account"
+          hint="Shows up in Paseo's model picker under Profiles, so a chat on that account is one tap away."
+          value={settings.values.createProfiles}
           disabled={settings.saving}
-          onValueChange={(autoSwitch) => save({ autoSwitch })}
-        />
-        <SettingsSwitch
-          label="Keep going after a switch"
-          hint="Sends a short follow-up so the interrupted task continues."
-          value={settings.values.autoContinue}
-          disabled={settings.saving || !settings.values.autoSwitch}
-          onValueChange={(autoContinue) => save({ autoContinue })}
-        />
-        <SettingsSwitch
-          label="Spread new agents across accounts"
-          hint="New agents start on the account with the most room instead of the default."
-          value={settings.values.balanceNewAgents}
-          disabled={settings.saving}
-          onValueChange={(balanceNewAgents) => save({ balanceNewAgents })}
-        />
-        <SettingsSwitch
-          label="Use banked resets when every account is out"
-          hint="Spends one of the account's banked resets instead of stopping. Resets are scarce, so this is off unless you turn it on."
-          value={settings.values.autoRedeem}
-          disabled={settings.saving || !settings.values.autoSwitch}
-          onValueChange={(autoRedeem) => save({ autoRedeem })}
-        />
-        <SettingsSwitch
-          label="When every account is out, fork the chat to the other provider"
-          hint="A stopped Claude chat carries on in a new ChatGPT agent, or the other way round, with the conversation so far. The new agent gets no more permissions than the original; the original stays as it was."
-          value={settings.values.forkOtherProvider}
-          disabled={settings.saving || !settings.values.autoSwitch}
-          onValueChange={(forkOtherProvider) => save({ forkOtherProvider })}
+          onValueChange={(createProfiles) => void settings.save({ ...settings.values, createProfiles }, settings.revision)}
         />
       </SettingsCard>
       {settings.saveError ? <Text style={text.danger}>{settings.saveError}</Text> : null}
     </View>
   );
-}
-
-export function describeReopen(prefix: string, summary: ReopenSummary): string {
-  const parts = [prefix];
-  if (summary.continuedIn) parts.push(`continuing in “${summary.continuedIn.title}”`);
-  if (summary.reopened.length > 0) parts.push(`${summary.reopened.length} agent(s) switched`);
-  if (summary.deferred.length > 0) parts.push(`${summary.deferred.length} will switch after their current turn`);
-  if (summary.failed.length > 0) parts.push(`${summary.failed.length} will switch on their next restart`);
-  return parts.join(" · ");
 }
 
 function chunk<T>(items: T[], size: number): T[][] {

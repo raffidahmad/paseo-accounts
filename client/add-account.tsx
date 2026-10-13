@@ -3,7 +3,7 @@ import { copyText, Modal, TextInput, useToast } from "@getpaseo/plugin/client/re
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { formatPlan } from "../shared/format";
-import { FAMILY_LABEL, type Family, type LoginMethod, type LoginView } from "../shared/model";
+import type { BaseProvider, LoginMethod, LoginView } from "../shared/model";
 import { cancelLogin, startLogin, submitLoginCode } from "../shared/rpc";
 import { describe, useStore, type ZeroSubStore } from "./store";
 import { Button, useText } from "./ui";
@@ -16,7 +16,7 @@ export function AddAccountModal({
   host,
   multiHost,
   store,
-  family,
+  base,
   accountId,
   onClose,
 }: {
@@ -26,7 +26,7 @@ export function AddAccountModal({
   /** The app knows several hosts, so say which one gets the account. */
   multiHost: boolean;
   store: ZeroSubStore;
-  family: Family;
+  base: BaseProvider;
   accountId?: string;
   onClose(): void;
 }) {
@@ -50,7 +50,7 @@ export function AddAccountModal({
       setStartError(null);
       setLoginId(null);
       try {
-        const login = await store.rpc(startLogin, { family, accountId, method: next });
+        const login = await store.rpc(startLogin, { base: base.id, accountId, method: next });
         // The modal closed (or a newer start replaced this one) before the daemon answered.
         if (closed.current || mine !== attempt.current) {
           void store.rpc(cancelLogin, { loginId: login.id }).catch(() => undefined);
@@ -61,7 +61,7 @@ export function AddAccountModal({
         if (!closed.current && mine === attempt.current) setStartError(describe(error));
       }
     },
-    [store, family, accountId],
+    [store, base.id, accountId],
   );
 
   useEffect(() => {
@@ -84,12 +84,12 @@ export function AddAccountModal({
   const switchMethod = useCallback(
     (next: LoginMethod) => {
       setMethod(next);
-      if (family === "codex") void begin(next);
+      if (base.id === "codex") void begin(next);
     },
-    [family, begin],
+    [base.id, begin],
   );
 
-  const title = accountId ? "Sign in again" : `Add ${FAMILY_LABEL[family]} account`;
+  const title = accountId ? "Sign in again" : `Add ${base.label} account`;
   let body: ReactNode;
   if (startError) {
     body = (
@@ -117,7 +117,7 @@ export function AddAccountModal({
         theme={theme}
         store={store}
         login={login}
-        family={family}
+        base={base}
         method={method}
         browserUsable={hostBrowser}
         onSwitch={switchMethod}
@@ -135,8 +135,8 @@ export function AddAccountModal({
       <>
         <Text style={text.heading}>You're signed in</Text>
         <Text style={text.body}>
-          {who} is ready. New {FAMILY_LABEL[family]} agents{multiHost ? ` on ${host.label}` : ""} can use it, and you can
-          move an agent to it from the account button in the message box.
+          {who} is ready{multiHost ? ` on ${host.label}` : ""}. It's now a provider in Paseo: pick it when you start a chat
+          to choose its models, or use its profile.
         </Text>
         <Row>
           <Button theme={theme} tone="primary" label="Done" tooltip="Close this window" tooltipAlign="end" onPress={onClose} />
@@ -181,7 +181,7 @@ function SignInSteps({
   theme,
   store,
   login,
-  family,
+  base,
   method,
   browserUsable,
   onSwitch,
@@ -189,7 +189,7 @@ function SignInSteps({
   theme: Theme;
   store: ZeroSubStore;
   login: LoginView;
-  family: Family;
+  base: BaseProvider;
   method: LoginMethod;
   /** A browser on the host's computer can finish the sign-in, so offer that route too. */
   browserUsable: boolean;
@@ -202,7 +202,7 @@ function SignInSteps({
   const [codeError, setCodeError] = useState<string | null>(null);
 
   // Claude: the browser link completes by itself; the code link works from any device.
-  const pasteFlow = family === "claude" && (method === "code" || !login.url) && Boolean(login.codeUrl);
+  const pasteFlow = base.id === "claude" && (method === "code" || !login.url) && Boolean(login.codeUrl);
   const link = pasteFlow ? login.codeUrl : login.url ?? login.codeUrl;
 
   const open = useCallback(() => {
@@ -247,8 +247,8 @@ function SignInSteps({
     [theme],
   );
 
-  const service = family === "claude" ? "Claude" : "ChatGPT";
-  const canSwitch = browserUsable && (family === "codex" || (Boolean(login.url) && Boolean(login.codeUrl)));
+  const service = base.id === "codex" ? "ChatGPT" : base.label;
+  const canSwitch = browserUsable && (base.id === "codex" || (Boolean(login.url) && Boolean(login.codeUrl)));
   return (
     <View style={{ gap: 16 }}>
       <Step theme={theme} number={1} title={`Open the ${service} sign-in page`}>

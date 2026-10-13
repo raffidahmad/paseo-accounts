@@ -1,6 +1,6 @@
 # Rename the plugin and credit ZeroSub as its origin (future issue)
 
-Draft for a GitHub issue (creation was refused with 403; paste this in once access works, then delete this file).
+Future work. Issues are disabled on this repo, so it is kept here; turn it into an issue if Issues get enabled.
 
 ## Context
 After the "accounts as native Paseo providers" rework the plugin is generic and no longer switches accounts, so "ZeroSub" no longer describes it.
