@@ -34,6 +34,7 @@
     "shared/",
     "!**/*.test.ts",
     "README.md",
+    "OVERVIEW.md",
     "LICENSE"
   ],
   "scripts": {
