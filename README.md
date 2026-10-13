@@ -27,11 +27,11 @@ paseo plugin install npm:@raffidahmad/paseo-accounts
 paseo plugin install github:raffidahmad/paseo-accounts
 ```
 
-Then open **Accounts** in the sidebar.
+Then open **Settings → Plugins → Paseo Accounts**.
 
 ## Use it
 
-1. Open **Accounts** in the sidebar, or **Settings → Plugins → Paseo Accounts** (the same screen). Each built-in provider has a section; your own CLI login is listed for Claude and ChatGPT.
+1. Open **Settings → Plugins → Paseo Accounts**. Each built-in provider has a section; your own CLI login is listed for Claude and ChatGPT.
 2. Click **Add account** in a provider's section.
    - **Claude or ChatGPT:** click **Open sign-in page** and sign in with the other account. In a browser on the host's own computer the page finishes by itself. Anywhere else, choose **Use a code instead**: for Claude paste the code shown after sign-in, for ChatGPT type the code shown in Paseo on the page. Phones, and hosts without a desktop (servers, containers, daemons started over SSH), start with the code.
    - **Any other provider:** give the account a name and the environment variables it should run with (`KEY=value`, one per line), for example an API key or a separate config folder.
@@ -65,7 +65,7 @@ A `before("agent.session_open")` hook refreshes those links when a session opens
 
 ## Several hosts
 
-Paseo installs plugins per host (daemon), so install Paseo Accounts on each host that should use it. When more than one host has it, Paseo shows a single **Accounts** item with a host picker at the top.
+Paseo installs plugins per host (daemon), so install Paseo Accounts on each host that should use it. Use Paseo's host picker to choose which host's accounts you are looking at.
 
 - **Each host has its own accounts and preferences**, because the sign-ins live on the machine where the agents run.
 - **Sign the same account in on each host.** Paseo Accounts never copies sign-ins between hosts. Both providers rotate sign-in tokens, so two machines sharing one token sign each other out. Separate sign-ins of the same account work fine.

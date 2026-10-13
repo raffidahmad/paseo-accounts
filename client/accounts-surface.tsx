@@ -2,7 +2,7 @@ import { useHosts, useSettings, type PluginSurfaceProps } from "@getpaseo/plugin
 import { Icon, Modal, TextInput, useToast } from "@getpaseo/plugin/client/react-native";
 import { SettingsCard, SettingsSwitch } from "@getpaseo/plugin/client/ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { accountSubtitle, formatAge, formatPlan, usageSummary } from "../shared/format";
 import type { AccountView, BaseProvider } from "../shared/model";
 import { preferences } from "../shared/preferences";
@@ -14,29 +14,7 @@ import { Badge, Button, Card, IconButton, UsageBar, useText } from "./ui";
 
 type Theme = PluginSurfaceProps["theme"];
 
-/** The Accounts screen: a page of its own in the sidebar. */
-export function AccountsSurface(props: PluginSurfaceProps & { store: AccountsStore }) {
-  const { theme, layout } = props;
-  return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.surface0 }}>
-      <ScrollView
-        contentContainerStyle={{
-          padding: layout.compact ? 16 : 28,
-          maxWidth: 820,
-          width: "100%",
-          alignSelf: "center",
-        }}
-      >
-        <AccountsContent {...props} />
-      </ScrollView>
-    </View>
-  );
-}
-
-/**
- * The accounts themselves, without a page around them, so the sidebar screen and Paseo's settings
- * screen show the same thing. `embedded` drops the page heading when the host already shows one.
- */
+/** The accounts themselves, for Paseo's settings screen. `embedded` drops the page heading the host already shows. */
 export function AccountsContent(props: PluginSurfaceProps & { store: AccountsStore; embedded?: boolean }) {
   const { theme, layout, host, store, embedded } = props;
   const { state, error } = useStore(store);
