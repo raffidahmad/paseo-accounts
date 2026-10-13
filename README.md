@@ -77,15 +77,18 @@ Paseo installs plugins per host (daemon), so install Paseo Accounts on each host
 - To show Claude usage, Paseo Accounts reads each account's current access token and calls Anthropic's usage endpoint, the same way Paseo's built-in usage display and `/usage` do. It never logs or stores tokens and never refreshes them itself. When you refresh usage (the ↻ button) and a token has expired, it runs `claude -p /usage` so Claude Code renews its own sign-in. Codex usage comes from `codex app-server`.
 - Removing an account deletes its provider and profiles, signs it out (`claude auth logout` / Codex logout) and deletes its home. A sign-in you abandon is cleaned up the same way. Your CLI login can't be removed from Paseo Accounts.
 
-## Upgrading from ZeroSub 1.x
+## Coming from ZeroSub
 
-This plugin was called ZeroSub up to 1.x. 2.0 is a clean break: it has a new name, plugin id (`paseo-accounts`) and data folder, and doesn't read the 1.x registry, so uninstall `zerosub`, install this one and add your accounts again. Nothing deletes what 1.x left behind. When you no longer need it, remove it yourself:
+Paseo Accounts grew out of [ZeroSub](https://github.com/kapybara-org/zerosub), and the two are independent plugins: different plugin id (`paseo-accounts`), data folder and storage, so they can be installed side by side. ZeroSub 1.x keeps working for anyone who wants its per-agent switching, automatic failover and banked resets; Paseo Accounts doesn't have those. An agent here stays on the account (provider) it started with.
+
+Paseo Accounts doesn't read ZeroSub's accounts, so add yours again here. If you switch for good, nothing is deleted for you. Remove ZeroSub when you no longer need it, after signing its accounts out in its own Accounts screen:
 
 ```bash
+paseo plugin remove zerosub
 rm -rf ~/.paseo/zerosub
 ```
 
-Do this after re-adding your accounts, and note that the old homes stay signed in until you delete them (`paseo plugin remove zerosub` removes the old plugin). Per-agent account switching, automatic failover, banked resets and forking to another provider were removed.
+Its added accounts stay signed in until you remove them there or delete that folder.
 
 ## Limitations
 
