@@ -1,6 +1,6 @@
 # Rework ZeroSub: accounts become native Paseo providers (+ per-account profiles)
 
-> Tracking file. GitHub issue creation was refused (403, the integration lacks Issues permission), so this file on branch `feat/accounts-as-providers` is the source of truth. Tick boxes as work lands, note commit SHAs, push after every update. **Delete this file in the final commit once everything is done** (or move its content into an issue).
+> Tracking file. Issues are disabled on this repo (410; earlier a 403), so this file on branch `feat/accounts-as-providers` is the source of truth. Tick boxes as work lands, note commit SHAs, push after every update. **Delete this file in the final commit once everything is done** (or move its content into an issue).
 
 ## Goal
 
@@ -47,14 +47,14 @@ The plugin gets much smaller and generic.
 - [x] `server/binaries.ts` `providerCommand(provider: string)`
 
 ### Remaining
-- [ ] `server/usage.ts`: drop `showLimit` (+ its tests); `usage.test.ts`: remove `SwitchGuard` block and `resets` field
-- [ ] `server/providers.ts` + `server/providers.test.ts` (entry shape, id generation, base listing, profile add/remove/rename, reconcile)
-- [ ] `server/service.ts` rewrite per Architecture
-- [ ] `server/homes.ts`: nothing may delete homes except explicit remove / failed or cancelled login (the old orphan collector is gone); `homes.test.ts` still passes
-- [ ] `index.server.ts`: adapters `{claude, codex}`, handlers for the new RPCs, session-open overlay hook, `agent.turn_ended` → usage refresh for managed accounts; remove old handlers/hooks
+- [x] `server/usage.ts`: drop `showLimit` (+ its tests); `usage.test.ts`: remove `SwitchGuard` block and `resets` field
+- [x] `server/providers.ts` + `server/providers.test.ts` (entry shape, id generation, base listing, profile add/remove/rename, reconcile)
+- [x] `server/service.ts` rewrite per Architecture
+- [x] `server/homes.ts`: nothing may delete homes except explicit remove / failed or cancelled login (the old orphan collector is gone); `homes.test.ts` still passes
+- [x] `index.server.ts`: adapters `{claude, codex}`, handlers for the new RPCs, session-open overlay hook, `agent.turn_ended` → usage refresh for managed accounts; remove old handlers/hooks
 - [ ] Client: `client/store.ts`, `client/accounts-surface.tsx` (one section per base provider from `state.bases`; account cards with usage, rename, remove, profile toggle, Paseo-disabled badge; no default/switch/reset UI), `client/add-account.tsx` (managed-login flow for adapter bases + env-account form for others), `client/settings-screen.tsx` (just `createProfiles`), `client/ui.tsx` cleanup, `index.client.tsx` (drop pills, commands, timeline renderer)
-- [ ] `shared/format.ts`: drop `shortLabel` and removed statuses in `usageSummary`; fix `format.test.ts`
-- [ ] `server/parsers.test.ts`: remove hand-off tests
+- [x] `shared/format.ts`: drop `shortLabel` and removed statuses in `usageSummary`; fix `format.test.ts`
+- [x] `server/parsers.test.ts`: remove hand-off tests
 - [ ] `README.md`: rewrite Use / How it works / Limitations for the provider model; document the clean break and how to delete old `state.json` + `homes/`; env accounts for non-Claude/Codex providers
 - [ ] `package.json` description/keywords, version `2.0.0`; `paseo-plugin.json` if needed
 - [ ] `npm run typecheck`, `npm test`, `npm run audit:mobile` all green

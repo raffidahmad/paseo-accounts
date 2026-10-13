@@ -57,13 +57,6 @@ export function formatPlan(plan: string | null): string | null {
   return PLAN_LABELS[key] ?? plan.charAt(0).toUpperCase() + plan.slice(1);
 }
 
-/** Short name for a composer pill: the nickname, trimmed to fit. */
-export function shortLabel(account: Pick<AccountView, "label">, max = 18): string {
-  const label = account.label.trim();
-  return label.length <= max ? label : `${label.slice(0, max - 1)}…`;
-}
-
-/** One line summarising an account's headroom, e.g. "42% of 5-hour used · resets in 2h". */
 /**
  * The line under an account's name: its email, plus its organization when that adds something.
  * Claude names a personal organization after its owner ("…'s Organization"), which only repeats it.
@@ -86,15 +79,13 @@ export function formatAge(at: string, now: number = Date.now()): string {
   return hours < 48 ? `${hours}h ago` : `${Math.round(hours / 24)}d ago`;
 }
 
+/** One line summarising an account's headroom, e.g. "42% of 5-hour used · resets in 2h". */
 export function usageSummary(account: AccountView, now: number = Date.now()): string | null {
-  if (account.status === "disabled") return "Disabled for now";
-  if (account.status === "limited") {
-    const reset = formatResetIn(account.limitedUntil, now);
-    return reset ? `Limit reached · resets ${reset}` : "Limit reached";
-  }
-  const peak = account.usage ? peakUsage(account.usage.windows) : null;
+  const windows = account.usage?.windows ?? [];
+  const peak = peakUsage(windows);
   if (!peak) return null;
   const reset = formatResetIn(peak.resetsAt, now);
+  if (account.status === "limited") return reset ? `Limit reached · resets ${reset}` : "Limit reached";
   const base = `${formatPercent(peak.usedPercent)} of ${peak.label.toLowerCase()} used`;
   return reset ? `${base} · resets ${reset}` : base;
 }

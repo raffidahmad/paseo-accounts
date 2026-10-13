@@ -3,9 +3,6 @@ import { UsageSchema, type Usage } from "../shared/model";
 import { readJson, writeJsonAtomic } from "./json-file";
 import { dataDir } from "./paths";
 
-/** How close a limit notice's reset time must be to a window's for that window to be the full one. */
-const MATCH_MS = 20 * 60_000;
-
 /** How long to wait after the provider asks us to slow down (HTTP 429), from its `Retry-After`. */
 export function retryDelayMs(retryAfter: string | null, now: number = Date.now()): number {
   const fallback = 2 * 60_000;
@@ -14,26 +11,6 @@ export function retryDelayMs(retryAfter: string | null, now: number = Date.now()
   const ms = Number.isFinite(seconds) ? seconds * 1_000 : Date.parse(retryAfter) - now;
   if (!Number.isFinite(ms)) return fallback;
   return Math.min(30 * 60_000, Math.max(30_000, ms));
-}
-
-/**
- * The reading with the window a limit notice is about shown as full, since the notice is the
- * freshest word on usage there is. That window is the one resetting when the notice says it will;
- * when several do, the fullest one.
- */
-export function showLimit(usage: Usage, resetsAt: string | null): Usage {
-  const at = resetsAt ? Date.parse(resetsAt) : Number.NaN;
-  if (!Number.isFinite(at)) return usage;
-  let match = -1;
-  for (const [index, window] of usage.windows.entries()) {
-    if (!window.resetsAt || Math.abs(Date.parse(window.resetsAt) - at) > MATCH_MS) continue;
-    if (match < 0 || window.usedPercent > (usage.windows[match]?.usedPercent ?? 0)) match = index;
-  }
-  if (match < 0) return usage;
-  return {
-    ...usage,
-    windows: usage.windows.map((window, index) => (index === match ? { ...window, usedPercent: Math.max(100, window.usedPercent) } : window)),
-  };
 }
 
 /**

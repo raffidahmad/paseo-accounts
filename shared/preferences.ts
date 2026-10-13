@@ -14,3 +14,5 @@ export const preferences = defineSettings({
 });
 
 export type Preferences = z.output<typeof preferences.schema>;
+
+export const DEFAULT_PREFERENCES: Preferences = { createProfiles: true };
