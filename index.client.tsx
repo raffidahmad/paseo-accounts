@@ -11,9 +11,9 @@ export default function contribute(client: PluginClientContext) {
   client.addSidebarItem({ id: "accounts", title: "Accounts", icon: "Users", surface: "accounts" });
   client.addSettingsScreen({
     id: "preferences",
-    title: "Paseo Accounts preferences",
+    title: "Paseo Accounts",
     icon: "SlidersHorizontal",
-    Component: (props) => <PreferencesScreen {...props} onOpenAccounts={() => client.openSurface("accounts")} />,
+    Component: (props) => <PreferencesScreen {...props} store={store} />,
   });
 
   return () => {

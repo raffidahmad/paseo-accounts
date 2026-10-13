@@ -31,7 +31,7 @@ Then open **Accounts** in the sidebar.
 
 ## Use it
 
-1. Open **Accounts**. Each built-in provider has a section; your own CLI login is listed for Claude and ChatGPT.
+1. Open **Accounts** in the sidebar, or **Settings → Plugins → Paseo Accounts** (the same screen). Each built-in provider has a section; your own CLI login is listed for Claude and ChatGPT.
 2. Click **Add account** in a provider's section.
    - **Claude or ChatGPT:** click **Open sign-in page** and sign in with the other account. In a browser on the host's own computer the page finishes by itself. Anywhere else, choose **Use a code instead**: for Claude paste the code shown after sign-in, for ChatGPT type the code shown in Paseo on the page. Phones, and hosts without a desktop (servers, containers, daemons started over SSH), start with the code.
    - **Any other provider:** give the account a name and the environment variables it should run with (`KEY=value`, one per line), for example an API key or a separate config folder.
