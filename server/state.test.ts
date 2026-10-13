@@ -11,13 +11,13 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await chmod(join(dir, "state.json"), 0o600).catch(() => undefined);
+  await chmod(join(dir, "accounts.json"), 0o600).catch(() => undefined);
   await rm(dir, { recursive: true, force: true });
 });
 
 const account = {
   id: "claude-main",
-  family: "claude",
+  base: "claude",
   label: "me",
   kind: "main",
   home: null,
@@ -27,32 +27,27 @@ const account = {
 describe("salvageState", () => {
   it("keeps valid entries and drops only the broken ones", () => {
     const { state, dropped } = salvageState({
-      accounts: [account, { id: "broken", family: "gemini" }],
-      bindings: { a: { accountId: "claude-main", source: "thread", at: "x" }, b: { accountId: 7 } },
-      sessions: {},
-      defaults: { claude: "claude-main", codex: null },
+      accounts: [account, { id: "broken" }, { id: "old", family: "claude" }],
     });
     expect(dropped).toBe(true);
     expect(state.accounts.map((entry) => entry.id)).toEqual(["claude-main"]);
-    expect(Object.keys(state.bindings)).toEqual(["a"]);
-    expect(state.defaults.claude).toBe("claude-main");
   });
 });
 
 describe("StateStore", () => {
   it("backs up a file it can't parse instead of silently discarding it", async () => {
-    const path = join(dir, "state.json");
+    const path = join(dir, "accounts.json");
     await writeFile(path, "{ not json");
     const store = new StateStore(path);
     expect((await store.read()).accounts).toEqual([]);
-    const backups = (await readdir(dir)).filter((name) => name.startsWith("state.json.bad-"));
+    const backups = (await readdir(dir)).filter((name) => name.startsWith("accounts.json.bad-"));
     expect(backups).toHaveLength(1);
     expect(await readFile(join(dir, backups[0] ?? ""), "utf8")).toBe("{ not json");
   });
 
   it("never overwrites a file it couldn't read", async () => {
     if (process.getuid?.() === 0) return; // root can read anything
-    const path = join(dir, "state.json");
+    const path = join(dir, "accounts.json");
     await writeFile(path, JSON.stringify({ accounts: [account] }));
     await chmod(path, 0o000);
     const store = new StateStore(path);

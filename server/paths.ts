@@ -12,7 +12,7 @@ export function dataDir(): string {
 }
 
 export function statePath(): string {
-  return join(dataDir(), "state.json");
+  return join(dataDir(), "accounts.json");
 }
 
 export function homesDir(): string {

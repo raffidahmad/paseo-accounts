@@ -1,18 +1,15 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import type { LoginMethod, ResetOffer, Usage, UsageWindow } from "../shared/model";
+import type { LoginMethod, Usage, UsageWindow } from "../shared/model";
 import {
   ProgressEmitter,
   spawnEnv,
   type EnvPatch,
-  type FamilyAdapter,
+  type ProviderAdapter,
   type Identity,
   type LoginHandle,
-  type RedeemReply,
 } from "./adapter";
 import { providerCommand } from "./binaries";
 import { codexSqliteHome, prepareCodexHome } from "./homes";
-import { detectCodexLimit, detectCodexSignOut } from "./limits";
 import { run } from "./process";
 
 /** The originator Codex's own CLI logs in with; the sign-in service knows it. */
@@ -157,10 +154,8 @@ interface Snapshot {
   usage: Usage;
 }
 
-export class CodexAdapter implements FamilyAdapter {
-  readonly family = "codex" as const;
-  /** ChatGPT accounts can't decrypt each other's reasoning, so threads stay on their account. */
-  readonly portable = false;
+export class CodexAdapter implements ProviderAdapter {
+  readonly base = "codex";
   readonly usageSpacingMs = 20_000;
   private readonly snapshots = new Map<string, { at: number; value: Promise<Snapshot> }>();
 
@@ -219,7 +214,6 @@ export class CodexAdapter implements FamilyAdapter {
             windows: [],
             error: signedIn ? "Signed in with an API key, not a ChatGPT plan." : "Not signed in.",
             cached: false,
-            resets: null,
           },
         };
       }
@@ -228,21 +222,16 @@ export class CodexAdapter implements FamilyAdapter {
       let usage: Usage;
       let accountId: string | null = null;
       try {
-        // Background reads skip the reset-credit detail lookup; the count still comes back.
-        let limits = (await server.request("account/rateLimits/read", { excludeResetCreditDetails: true })) as Json;
-        if (resetCount(limits.rateLimitResetCredits) > 0) {
-          limits = (await server.request("account/rateLimits/read", {}).catch(() => limits)) as Json;
-        }
+        const limits = (await server.request("account/rateLimits/read", { excludeResetCreditDetails: true })) as Json;
         accountId = typeof limits.accountId === "string" ? limits.accountId : null;
         usage = {
           fetchedAt,
           windows: parseRateLimits(limits.rateLimits),
           error: null,
           cached: false,
-          resets: parseResetCredits(limits.rateLimitResetCredits),
         };
       } catch (error) {
-        usage = { fetchedAt, windows: [], error: error instanceof Error ? error.message : String(error), cached: false, resets: null };
+        usage = { fetchedAt, windows: [], error: error instanceof Error ? error.message : String(error), cached: false };
       }
       return {
         identity: {
@@ -276,38 +265,6 @@ export class CodexAdapter implements FamilyAdapter {
       server.close();
     }
   }
-
-  /**
-   * Codex's own reset-credit API (what `/usage` → reset in the Codex CLI uses). It never spends a
-   * credit while nothing is used up (`nothingToReset`), so automatic use needs no extra check.
-   */
-  async redeemReset(home: string | null): Promise<RedeemReply> {
-    this.snapshots.delete(home ?? "");
-    const server = await AppServer.open(spawnEnv(await this.env(home)));
-    try {
-      // One idempotency key per attempt, so a retried request can never spend a second credit.
-      const reply = (await server.request(
-        "account/rateLimitResetCredit/consume",
-        { idempotencyKey: randomUUID() },
-        60_000,
-      )) as { outcome?: unknown };
-      const after = (await server.request("account/rateLimits/read", { excludeResetCreditDetails: true }).catch(() => null)) as Json | null;
-      const left = after ? resetCount(after.rateLimitResetCredits) : null;
-      return readConsumeReply(reply?.outcome, left);
-    } catch (error) {
-      return {
-        outcome: "error",
-        message: `The reset request didn't finish (${error instanceof Error ? error.message : String(error)}). Refresh usage before trying again.`,
-        left: null,
-      };
-    } finally {
-      server.close();
-      this.snapshots.delete(home ?? "");
-    }
-  }
-
-  detectLimit = detectCodexLimit;
-  detectSignOut = detectCodexSignOut;
 }
 
 class CodexLogin extends ProgressEmitter implements LoginHandle {
@@ -407,53 +364,4 @@ export function parseRateLimits(snapshot: unknown): UsageWindow[] {
     });
   }
   return windows;
-}
-
-/** Banked reset credits, from `rateLimitResetCredits` (`availableCount` is a JSON number on the wire). */
-export function resetCount(summary: unknown): number {
-  const count = (summary as { availableCount?: unknown } | null)?.availableCount;
-  return typeof count === "number" && Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
-}
-
-export function parseResetCredits(summary: unknown): ResetOffer | null {
-  const available = resetCount(summary);
-  if (available === 0) return null;
-  const credits = (summary as { credits?: unknown }).credits;
-  const usable = (Array.isArray(credits) ? credits : []).filter(
-    (credit): credit is Json => Boolean(credit) && typeof credit === "object" && (credit as Json).status === "available",
-  );
-  const expiring = usable
-    .map((credit) => (typeof credit.expiresAt === "number" ? credit.expiresAt : null))
-    .filter((at): at is number => at !== null)
-    .sort((a, b) => a - b);
-  const title = usable.map((credit) => credit.title).find((value): value is string => typeof value === "string" && value.trim() !== "");
-  return {
-    available,
-    // Codex decides at redeem time (it answers "nothing to reset" when the limits aren't used up).
-    usableNow: true,
-    blockedReason: null,
-    expiresAt: expiring[0] !== undefined ? new Date(expiring[0] * 1000).toISOString() : null,
-    refills: ["5-hour", "weekly"],
-    label: title?.trim() ?? null,
-  };
-}
-
-export function readConsumeReply(outcome: unknown, left: number | null): RedeemReply {
-  const leftText = left === null ? "" : ` · ${left} left`;
-  switch (outcome) {
-    case "reset":
-      return { outcome: "reset", message: `Codex usage limits reset${leftText}.`, left };
-    case "nothingToReset":
-      return {
-        outcome: "not_limited",
-        message: "Nothing to reset: this account's limits aren't used up, so the reset was kept.",
-        left,
-      };
-    case "noCredit":
-      return { outcome: "none", message: "No banked resets left on this account.", left: 0 };
-    case "alreadyRedeemed":
-      return { outcome: "already_used", message: `That reset was already used${leftText}.`, left };
-    default:
-      return { outcome: "error", message: "Codex sent an unexpected reply. Refresh usage before trying again.", left };
-  }
 }

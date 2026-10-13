@@ -1,112 +1,63 @@
 import { copyFile } from "node:fs/promises";
 import { z } from "zod";
-import { AccountKindSchema, FamilySchema, type Family } from "../shared/model";
+import { AccountKindSchema } from "../shared/model";
 import { Mutex, readJson, writeJsonAtomic } from "./json-file";
 import { statePath } from "./paths";
 
+/**
+ * An account ZeroSub added. It is also a provider entry in Paseo's config (`providers.<id>`), which
+ * is the source of truth for the label and environment; this registry holds what Paseo can't:
+ * the credential home and the identity learned from signing in.
+ */
 export const StoredAccountSchema = z.object({
+  /** The Paseo provider ID, and the name of the credential home's folder. */
   id: z.string(),
-  family: FamilySchema,
+  /** The built-in provider this account extends. */
+  base: z.string(),
   label: z.string(),
   /** The label was generated from the email and may be replaced when the identity is learned. */
   autoLabel: z.boolean().default(true),
   kind: AccountKindSchema,
-  /** Credential home (`CLAUDE_CONFIG_DIR` / `CODEX_HOME`). `null` for the CLI's own login. */
+  /** Credential home (`CLAUDE_CONFIG_DIR` / `CODEX_HOME`). `null` for the base login and env-only accounts. */
   home: z.string().nullable(),
+  /** The provider has no adapter: sign-in and usage are the user's business. */
+  envOnly: z.boolean().default(false),
   email: z.string().nullable().default(null),
   plan: z.string().nullable().default(null),
   organization: z.string().nullable().default(null),
   /** Stable identity used to spot the same account being added twice. */
   identity: z.string().nullable().default(null),
   signedIn: z.boolean().default(true),
-  /** Set aside by the user for a while: stays signed in, but nothing is routed to it. */
-  disabled: z.boolean().default(false),
-  limitedUntil: z.string().nullable().default(null),
-  /** What kind of limit `limitedUntil` records; only `window` limits clear from usage readings. */
-  limitKind: z.enum(["window", "budget"]).nullable().default(null),
-  /** When the current limit was recorded. */
-  limitedAt: z.string().nullable().default(null),
   createdAt: z.string(),
 });
 export type StoredAccount = z.infer<typeof StoredAccountSchema>;
 
-export const BindingSchema = z.object({
-  accountId: z.string(),
-  /**
-   * `user`: chosen in the UI. `auto`: moved after a limit. `balance`: spread at creation.
-   * `thread`: a conversation that can't change accounts, pinned where it started.
-   */
-  source: z.enum(["user", "auto", "balance", "thread"]),
-  at: z.string(),
-});
-export type Binding = z.infer<typeof BindingSchema>;
-
-export const LiveSessionSchema = z.object({
-  accountId: z.string(),
-  family: FamilySchema,
-  openedAt: z.string(),
-});
-export type LiveSession = z.infer<typeof LiveSessionSchema>;
-
 export const StoredStateSchema = z.object({
-  version: z.literal(1).default(1),
+  version: z.literal(2).default(2),
   accounts: z.array(StoredAccountSchema).default([]),
-  defaults: z
-    .object({ claude: z.string().nullable().default(null), codex: z.string().nullable().default(null) })
-    .default({ claude: null, codex: null }),
-  /** Per-agent overrides of the default account. */
-  bindings: z.record(z.string(), BindingSchema).default({}),
-  /** Which account each agent's live provider session was opened with. */
-  sessions: z.record(z.string(), LiveSessionSchema).default({}),
 });
 export type StoredState = z.infer<typeof StoredStateSchema>;
-
-export const MAIN_ACCOUNT_ID: Record<Family, string> = { claude: "claude-main", codex: "codex-main" };
 
 export function emptyState(): StoredState {
   return StoredStateSchema.parse({});
 }
 
-/**
- * Keeps every entry that still validates, so one bad record (say, after a downgrade) can't wipe
- * the accounts and every Codex thread's pin. Reports whether anything had to be dropped.
- */
+/** Keeps every account that still validates, so one bad record can't wipe the rest. */
 export function salvageState(raw: unknown): { state: StoredState; dropped: boolean } {
   const whole = StoredStateSchema.safeParse(raw);
   if (whole.success) return { state: whole.data, dropped: false };
   const source = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   let dropped = false;
-  const keep = <T>(schema: z.ZodType<T>, value: unknown): T | undefined => {
-    const parsed = schema.safeParse(value);
-    if (!parsed.success) dropped = true;
-    return parsed.success ? parsed.data : undefined;
-  };
-  const accounts = (Array.isArray(source.accounts) ? source.accounts : [])
-    .map((entry) => keep(StoredAccountSchema, entry))
-    .filter((entry): entry is StoredAccount => entry !== undefined);
-  const records = <T>(schema: z.ZodType<T>, value: unknown): Record<string, T> => {
-    const result: Record<string, T> = {};
-    if (!value || typeof value !== "object") return result;
-    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
-      const parsed = keep(schema, entry);
-      if (parsed !== undefined) result[key] = parsed;
-    }
-    return result;
-  };
-  const defaults = keep(StoredStateSchema.shape.defaults, source.defaults) ?? { claude: null, codex: null };
-  return {
-    state: {
-      version: 1,
-      accounts,
-      defaults,
-      bindings: records(BindingSchema, source.bindings),
-      sessions: records(LiveSessionSchema, source.sessions),
-    },
-    dropped: true,
-  };
+  const accounts: StoredAccount[] = [];
+  for (const entry of Array.isArray(source.accounts) ? source.accounts : []) {
+    const parsed = StoredAccountSchema.safeParse(entry);
+    if (parsed.success) accounts.push(parsed.data);
+    else dropped = true;
+  }
+  return { state: { version: 2, accounts }, dropped: true };
 }
 
-/** The registry: small, read on every session open, written atomically. */
+/** The registry: small, written atomically. */
 export class StateStore {
   private cached: StoredState | null = null;
   private readonly mutex = new Mutex();
@@ -161,19 +112,6 @@ export function findAccount(state: StoredState, accountId: string | null | undef
   return accountId ? state.accounts.find((account) => account.id === accountId) : undefined;
 }
 
-export function accountsOf(state: StoredState, family: Family): StoredAccount[] {
-  return state.accounts.filter((account) => account.family === family);
-}
-
-/** The explicit default, else the CLI's own login, else the first account. */
-export function defaultAccount(state: StoredState, family: Family): StoredAccount | undefined {
-  const chosen = findAccount(state, state.defaults[family]);
-  if (chosen && chosen.family === family) return chosen;
-  const accounts = accountsOf(state, family);
-  return accounts.find((account) => account.kind === "main") ?? accounts[0];
-}
-
-/** The CLI's own login for a family, if registered. */
-export function mainAccount(state: StoredState, family: Family): StoredAccount | undefined {
-  return findAccount(state, MAIN_ACCOUNT_ID[family]);
+export function accountsOf(state: StoredState, base: string): StoredAccount[] {
+  return state.accounts.filter((account) => account.base === base);
 }

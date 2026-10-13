@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { readFile, rm } from "node:fs/promises";
 import { homedir, tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
@@ -8,16 +8,13 @@ import {
   ProgressEmitter,
   spawnEnv,
   type EnvPatch,
-  type FamilyAdapter,
+  type ProviderAdapter,
   type Identity,
   type LoginHandle,
-  type RedeemReply,
   type UsageRead,
 } from "./adapter";
 import { browserCaptureScript, providerCommand } from "./binaries";
-import { CLAUDE_RESET_PROGRAM, describeResetBlock, parseClaudeResets, readClaimReply } from "./claude-resets";
 import { prepareClaudeHome } from "./homes";
-import { detectClaudeLimit, detectClaudeSignOut } from "./limits";
 import { mainClaudeGlobalConfig } from "./paths";
 import { firstUrl, run, stripAnsi } from "./process";
 import { retryDelayMs } from "./usage";
@@ -37,14 +34,6 @@ function isFresh(credentials: Credentials | null): credentials is Credentials {
   return Boolean(credentials?.accessToken) && (!credentials?.expiresAt || credentials.expiresAt > Date.now() + 60_000);
 }
 
-function statusFailure(status: number): RedeemReply {
-  if (status === 429) return { outcome: "error", message: "Too many attempts. Wait a minute and try again.", left: null };
-  if (status === 401 || status === 403) {
-    return { outcome: "error", message: "Claude rejected this account's sign-in. Sign it in again, then retry.", left: null };
-  }
-  return { outcome: "error", message: `Claude answered with HTTP ${status}. Try again later.`, left: null };
-}
-
 function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -52,13 +41,11 @@ function describe(error: unknown): string {
 /** Variables that would make a routed session use something other than its account's own login. */
 const OVERRIDING_AUTH = ["CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY"];
 
-export class ClaudeAdapter implements FamilyAdapter {
-  readonly family = "claude" as const;
-  readonly portable = true;
+export class ClaudeAdapter implements ProviderAdapter {
+  readonly base = "claude";
   /** Anthropic's usage endpoint answers 429 to rapid repeats. */
   readonly usageSpacingMs = 90_000;
   private readonly renewing = new Map<string, Promise<Credentials | null>>();
-  private readonly resetNotes = new Map<string, string>();
 
   async env(home: string | null): Promise<EnvPatch> {
     if (!home) return { CLAUDE_CONFIG_DIR: null, CLAUDE_SECURESTORAGE_CONFIG_DIR: null };
@@ -107,45 +94,32 @@ export class ClaudeAdapter implements FamilyAdapter {
     const profileScope = !credentials?.scopes || credentials.scopes.includes("user:profile");
     if (credentials?.accessToken && isFresh(credentials) && profileScope) {
       try {
-        // The `cedar_ember` read is the one Claude Code's /limit-reset makes: usage plus banked resets.
-        const response = await fetch(`${API}/api/oauth/usage?cedar_ember=1&skip_spend=1`, {
+        const response = await fetch(`${API}/api/oauth/usage?skip_spend=1`, {
           headers: apiHeaders(credentials.accessToken),
           signal: AbortSignal.timeout(15_000),
         });
         if (response.ok) {
-          const body = (await response.json()) as { cedar_ember?: unknown };
-          const windows = parseUsage(body);
-          this.noteResetStatus(home, body.cedar_ember);
-          return { fetchedAt, windows, error: null, cached: false, resets: parseClaudeResets(body.cedar_ember).offer };
+          return { fetchedAt, windows: parseUsage(await response.json()), error: null, cached: false };
         }
         // Anthropic rate-limits this endpoint (Claude Code and Paseo read it too). Wait as long as it
         // asks; meanwhile the last reading stays up, or Claude Code's own cached copy if it's newer.
         if (response.status === 429) {
           const retryAt = Date.now() + retryDelayMs(response.headers.get("retry-after"));
           const cached = await cachedUsage(home);
-          return { ...(cached ?? { fetchedAt, windows: [], error: null, cached: false, resets: null }), retryAt };
+          return { ...(cached ?? { fetchedAt, windows: [], error: null, cached: false }), retryAt };
         }
         if (response.status !== 401 && response.status !== 403) {
-          return { fetchedAt, windows: [], error: `Usage request failed (HTTP ${response.status})`, cached: false, resets: null };
+          return { fetchedAt, windows: [], error: `Usage request failed (HTTP ${response.status})`, cached: false };
         }
       } catch (error) {
-        return { fetchedAt, windows: [], error: error instanceof Error ? error.message : String(error), cached: false, resets: null };
+        return { fetchedAt, windows: [], error: error instanceof Error ? error.message : String(error), cached: false };
       }
     }
     // An idle account's token may have expired; Claude Code refreshes it on next use. Until then,
     // show the last utilisation Claude Code itself cached for this account.
     const cached = await cachedUsage(home);
     if (cached) return cached;
-    return { fetchedAt, windows: [], error: "Usage shows up after this account is next used.", cached: false, resets: null };
-  }
-
-  /** Logs (only when it changes) why an account does or doesn't show a banked reset. */
-  private noteResetStatus(home: string | null, block: unknown): void {
-    const key = home ? (home.split(/[\\/]/).pop() ?? home) : "CLI login";
-    const note = describeResetBlock(block);
-    if (this.resetNotes.get(key) === note) return;
-    this.resetNotes.set(key, note);
-    console.log(`[ZeroSub] Claude limit resets for ${key}: ${note}`);
+    return { fetchedAt, windows: [], error: "Usage shows up after this account is next used.", cached: false };
   }
 
   /**
@@ -171,72 +145,6 @@ export class ClaudeAdapter implements FamilyAdapter {
     return pending;
   }
 
-  async redeemReset(home: string | null, options: { onlyAtLimit?: boolean } = {}): Promise<RedeemReply> {
-    let credentials = await readCredentials(home).catch(() => null);
-    if (!isFresh(credentials)) credentials = await this.renewLogin(home);
-    const token = credentials?.accessToken;
-    if (!token || !isFresh(credentials)) {
-      return { outcome: "error", message: "Couldn't use this account's sign-in. Sign it in again, then retry.", left: null };
-    }
-
-    // Ask which grant is next: the server only accepts that one.
-    let status: ReturnType<typeof parseClaudeResets>;
-    try {
-      const response = await fetch(`${API}/api/oauth/usage?cedar_ember=1&skip_spend=1`, {
-        headers: apiHeaders(token),
-        signal: AbortSignal.timeout(15_000),
-      });
-      if (!response.ok) return statusFailure(response.status);
-      status = parseClaudeResets(((await response.json()) as { cedar_ember?: unknown }).cedar_ember);
-    } catch (error) {
-      return { outcome: "error", message: `Couldn't check the account's resets: ${describe(error)}`, left: null };
-    }
-    if (!status.offer || !status.nextGrantId) return { outcome: "none", message: "No banked resets left on this account.", left: 0 };
-    if (options.onlyAtLimit && !status.atLimit) {
-      // Something refilled the account since the limit hit, e.g. another host sharing it spent a reset.
-      return { outcome: "not_limited", message: "Claude says this account has room again, so the reset was kept.", left: status.offer.available };
-    }
-    if (!status.offer.usableNow) {
-      return {
-        outcome: "unavailable",
-        message: status.offer.blockedReason ?? "The reset can't be used right now.",
-        left: status.offer.available,
-      };
-    }
-
-    const organization = await this.organizationId(home);
-    if (!organization) return { outcome: "error", message: "Couldn't tell which Claude organization this account belongs to.", left: null };
-    try {
-      const response = await fetch(`${API}/api/organizations/${organization}/reset_rate_limits`, {
-        method: "POST",
-        headers: apiHeaders(token),
-        body: JSON.stringify({ program: CLAUDE_RESET_PROGRAM, grant_id: status.nextGrantId, request_id: randomUUID() }),
-        signal: AbortSignal.timeout(25_000),
-      });
-      if (!response.ok) return statusFailure(response.status);
-      return readClaimReply(await response.json().catch(() => null));
-    } catch (error) {
-      return {
-        outcome: "error",
-        message: `The reset request didn't finish (${describe(error)}), so it may or may not have gone through. Refresh usage before trying again.`,
-        left: null,
-      };
-    }
-  }
-
-  /** The account's organization UUID, as Claude Code records it. */
-  private async organizationId(home: string | null): Promise<string | null> {
-    const config = parseJsonObject(await readFile(home ? join(home, ".claude.json") : mainClaudeGlobalConfig(), "utf8").catch(() => ""));
-    const account = config?.oauthAccount as { organizationUuid?: unknown } | undefined;
-    let id = typeof account?.organizationUuid === "string" ? account.organizationUuid : null;
-    if (!id) {
-      const { command, prefix } = await providerCommand("claude");
-      const result = await run(command, [...prefix, "auth", "status", "--json"], { env: spawnEnv(await this.env(home)), timeoutMs: 30_000 });
-      id = str(parseJsonObject(result.stdout)?.orgId);
-    }
-    return id && /^[0-9a-f-]{8,64}$/i.test(id) ? id : null;
-  }
-
   async login(home: string | null, _method: LoginMethod): Promise<LoginHandle> {
     const { command, prefix } = await providerCommand("claude");
     const shim = await browserCaptureScript();
@@ -258,9 +166,6 @@ export class ClaudeAdapter implements FamilyAdapter {
       timeoutMs: 10_000,
     });
   }
-
-  detectLimit = detectClaudeLimit;
-  detectSignOut = detectClaudeSignOut;
 }
 
 class ClaudeLogin extends ProgressEmitter implements LoginHandle {
@@ -418,7 +323,7 @@ async function cachedUsage(home: string | null): Promise<Usage | null> {
   if (!cache || typeof cache.fetchedAtMs !== "number") return null;
   const windows = parseUsage(cache.utilization);
   if (windows.length === 0) return null;
-  return { fetchedAt: new Date(cache.fetchedAtMs).toISOString(), windows, error: null, cached: true, resets: null };
+  return { fetchedAt: new Date(cache.fetchedAtMs).toISOString(), windows, error: null, cached: true };
 }
 
 const WINDOW_LABELS: Array<[key: string, label: string]> = [
