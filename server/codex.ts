@@ -18,10 +18,17 @@ const CLIENT_NAME = "codex_cli_rs";
 
 type Json = Record<string, unknown>;
 
+const MAX_FRAME_BYTES = 1024 * 1024;
+/** Its steps time out one by one, so without this a stuck read could keep its callers waiting ~150 s. */
+const READ_DEADLINE_MS = 60_000;
+
 /** Newline-delimited JSON-RPC with `codex app-server` (no `jsonrpc` field on the wire). */
 class AppServer {
   private nextId = 1;
   private buffer = "";
+  /** Dropping the rest of a message over the limit, up to its newline. */
+  private skipping = false;
+  private warnedOversized = false;
   private stderr = "";
   private closed = false;
   private ending = false;
@@ -31,9 +38,12 @@ class AppServer {
 
   private constructor(private readonly child: ChildProcessWithoutNullStreams) {
     child.stdin.on("error", () => undefined);
-    child.stdout.on("data", (chunk: Buffer) => this.receive(chunk.toString("utf8")));
-    child.stderr.on("data", (chunk: Buffer) => {
-      this.stderr = (this.stderr + chunk.toString("utf8")).slice(-4_000);
+    // Decoding the stream, not each chunk, keeps a character split across two chunks whole.
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (text: string) => this.receive(text));
+    child.stderr.on("data", (text: string) => {
+      this.stderr = (this.stderr + text).slice(-4_000);
     });
     this.exited = new Promise((resolve) => {
       const finish = (error?: Error) => {
@@ -48,10 +58,13 @@ class AppServer {
     });
   }
 
-  static async open(env: NodeJS.ProcessEnv): Promise<AppServer> {
+  static async open(env: NodeJS.ProcessEnv, signal?: AbortSignal): Promise<AppServer> {
     const { command, prefix } = await providerCommand("codex");
+    signal?.throwIfAborted();
     const child = spawn(command, [...prefix, "app-server"], { env, stdio: ["pipe", "pipe", "pipe"] });
     const server = new AppServer(child);
+    // Stops the session wherever it is, even while it is still starting.
+    signal?.addEventListener("abort", () => server.close(), { once: true });
     try {
       await server.request(
         "initialize",
@@ -111,13 +124,25 @@ class AppServer {
   }
 
   private receive(text: string): void {
-    this.buffer += text;
+    if (this.closed || this.ending) return;
+    let rest = text;
+    if (this.skipping) {
+      const end = rest.indexOf("\n");
+      if (end < 0) return;
+      this.skipping = false;
+      rest = rest.slice(end + 1);
+    }
+    this.buffer += rest;
     let newline = this.buffer.indexOf("\n");
     while (newline >= 0) {
-      const line = this.buffer.slice(0, newline).trim();
+      const line = this.buffer.slice(0, newline);
       this.buffer = this.buffer.slice(newline + 1);
       newline = this.buffer.indexOf("\n");
-      if (!line) continue;
+      if (Buffer.byteLength(line, "utf8") > MAX_FRAME_BYTES) {
+        this.skipOversized();
+        continue;
+      }
+      if (!line.trim()) continue;
       let message: Json;
       try {
         message = JSON.parse(line) as Json;
@@ -126,6 +151,19 @@ class AppServer {
       }
       this.dispatch(message);
     }
+    // A message still arriving can't be kept past the limit either: drop it and skip to its newline.
+    if (Buffer.byteLength(this.buffer, "utf8") > MAX_FRAME_BYTES) {
+      this.buffer = "";
+      this.skipping = true;
+      this.skipOversized();
+    }
+  }
+
+  /** Only that message is lost; the session and every other request carry on. */
+  private skipOversized(): void {
+    if (this.warnedOversized) return;
+    this.warnedOversized = true;
+    console.warn("[ZeroSub] skipped a Codex message over the 1 MiB limit");
   }
 
   private dispatch(message: Json): void {
@@ -161,7 +199,7 @@ const EXPIRED_SIGN_IN = /401|unauthori[sz]ed|refresh token|token (has )?expired|
 export class CodexAdapter implements ProviderAdapter {
   readonly base = "codex";
   readonly usageSpacingMs = 20_000;
-  private readonly snapshots = new Map<string, { at: number; value: Promise<Snapshot> }>();
+  private readonly snapshots = new Map<string, { at: number; pending: boolean; value: Promise<Snapshot> }>();
 
   async env(home: string | null): Promise<EnvPatch> {
     if (!home) return { CODEX_HOME: null, CODEX_SQLITE_HOME: null };
@@ -196,15 +234,39 @@ export class CodexAdapter implements ProviderAdapter {
   private snapshot(home: string | null, fresh = false): Promise<Snapshot> {
     const key = home ?? "";
     const cached = this.snapshots.get(key);
-    if (cached && Date.now() - cached.at < (fresh ? 5_000 : 15_000)) return cached.value;
-    const value = this.readSnapshot(home);
-    this.snapshots.set(key, { at: Date.now(), value });
-    value.catch(() => this.snapshots.delete(key));
+    if (cached && (cached.pending || Date.now() - cached.at < (fresh ? 5_000 : 15_000))) return cached.value;
+    const value = this.readWithDeadline(home).finally(() => {
+      const current = this.snapshots.get(key);
+      if (current?.value === value) {
+        current.pending = false;
+        current.at = Date.now();
+      }
+    });
+    this.snapshots.set(key, { at: Date.now(), pending: true, value });
+    value.catch(() => {
+      if (this.snapshots.get(key)?.value === value) this.snapshots.delete(key);
+    });
     return value;
   }
 
-  private async readSnapshot(home: string | null): Promise<Snapshot> {
-    const server = await AppServer.open(spawnEnv(await this.env(home)));
+  /** Everyone waiting shares this read, so when it runs out of time they all get the error and the app server stops. */
+  private readWithDeadline(home: string | null): Promise<Snapshot> {
+    const deadline = new AbortController();
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        const error = new Error(`Codex did not answer within ${READ_DEADLINE_MS / 1000} s`);
+        deadline.abort(error);
+        reject(error);
+      }, READ_DEADLINE_MS);
+      timer.unref();
+      this.readSnapshot(home, deadline.signal)
+        .then(resolve, reject)
+        .finally(() => clearTimeout(timer));
+    });
+  }
+
+  private async readSnapshot(home: string | null, signal: AbortSignal): Promise<Snapshot> {
+    const server = await AppServer.open(spawnEnv(await this.env(home)), signal);
     try {
       const account = ((await server.request("account/read", {})) ?? {}) as Json;
       const details = account.account as { type?: unknown; email?: unknown; planType?: unknown } | null;
