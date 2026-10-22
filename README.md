@@ -37,6 +37,7 @@ Then open **Settings → Plugins → Paseo Accounts**.
    - **Any other provider:** give the account a name and the environment variables it should run with (`KEY=value`, one per line), for example an API key or a separate config folder.
 3. Start a chat and pick the account like any provider, or pick its profile under **Profiles** in the model picker. Paseo's **Settings → Providers** lists every account too, where you can switch one off.
 4. **Rename**, **Remove**, or **Add/Remove profile** from the account's card. Removing an account deletes its provider and profiles, and signs Claude and ChatGPT accounts out.
+5. **Sign in again** (the sign-in icon on a Claude or ChatGPT card) when a sign-in expires, for example when chats say the OAuth token has expired. It signs the CLI back in to the same account home, so the account's provider, profile, skills, settings and history stay. You don't need to remove and re-add the account. It works for your CLI login too. Paseo Accounts marks a card **Sign-in expired** when the provider rejects its token, when an agent turn ends with the token still expired, or when the ↻ refresh can't renew it. Chats that were already open keep their old sign-in, so start a new chat or reopen them afterwards.
 
 Agents already running on a removed account stop working; archive them first. Their conversations are kept.
 

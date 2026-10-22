@@ -226,7 +226,7 @@ const [confirmRemove, setConfirmRemove] = useState(false);
 const plan = formatPlan(account.plan);
 const summary = usageSummary(account);
 const subtitle = accountSubtitle(account) ?? (account.envKeys.length > 0 ? account.envKeys.join(", ") : null);
-const signedOut = account.status === "signed_out";
+const signedOut = account.status === "signed_out" || account.status === "expired";
 const faded = account.enabled ? null : { opacity: 0.55 };
 const windows = account.usage?.windows ?? [];
 const freshness = !signedOut && account.usage && windows.length > 0 ? `updated ${formatAge(account.usage.fetchedAt)}` : null;
@@ -278,6 +278,15 @@ return (
         ) : null}
       </View>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 2, marginTop: -4, marginRight: -6 }}>
+        {account.managedLogin && !signedOut ? (
+          <IconButton
+            theme={theme}
+            icon="LogIn"
+            label="Sign in again"
+            tooltip="Sign in again: renews this account's sign-in and keeps its skills, settings and history"
+            onPress={onSignIn}
+          />
+        ) : null}
         <IconButton theme={theme} icon="Pencil" label="Rename" tooltip="Rename this account" onPress={() => setRenaming(true)} />
         {account.kind !== "main" ? (
           <IconButton
@@ -299,13 +308,16 @@ return (
       {!account.enabled ? <Badge theme={theme} label="Off in Paseo" /> : null}
       {account.hasProfile ? <Badge theme={theme} label="Profile" tone="accent" /> : null}
       {account.status === "limited" ? <Badge theme={theme} label="Limit reached" tone="danger" /> : null}
-      {signedOut ? <Badge theme={theme} label="Signed out" tone="warning" /> : null}
+      {signedOut ? <Badge theme={theme} label={account.status === "expired" ? "Sign-in expired" : "Signed out"} tone="warning" /> : null}
     </View>
 
     {account.managedLogin ? (
       <View style={[{ gap: 10 }, faded]}>
         {signedOut ? (
-          <Text style={text.small}>Sign in again to use this account.</Text>
+          <Text style={text.small}>
+            {account.status === "expired" ? "Its sign-in has expired. " : ""}Sign in again to use this account. Its skills,
+            settings and history stay.
+          </Text>
         ) : windows.length > 0 ? (
           windows.map((limit) => <UsageBar key={limit.id} theme={theme} limit={limit} />)
         ) : (
