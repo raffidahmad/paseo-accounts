@@ -9,8 +9,11 @@ export interface Identity {
   identity: string | null;
 }
 
-/** A usage reading, plus when to ask again if the provider said to slow down. */
-export type UsageRead = Usage & { retryAt?: number };
+/**
+ * A usage reading, plus when to ask again if the provider said to slow down. `signInExpired` is
+ * true when the provider rejected the sign-in, false when it accepted it, and absent if unknown.
+ */
+export type UsageRead = Usage & { retryAt?: number; signInExpired?: boolean };
 
 export interface LoginProgress {
   step: LoginStep;
@@ -58,6 +61,12 @@ export interface ProviderAdapter {
    * (slow, so only for explicit requests, never background polls).
    */
   usage(home: string | null, options?: { renewLogin?: boolean }): Promise<UsageRead>;
+  /**
+   * Whether the stored sign-in has expired, asked right after an agent used the account: the CLI
+   * renews it on use, so one still expired then couldn't be renewed. Cheap: no network, no CLI run.
+   * `null` when there's nothing to tell.
+   */
+  signInExpired?(home: string | null): Promise<boolean | null>;
   login(home: string | null, method: LoginMethod): Promise<LoginHandle>;
   logout(home: string): Promise<void>;
 }

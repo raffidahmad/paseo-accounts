@@ -64,6 +64,8 @@ export class Service {
   private readonly usageInFlight = new Map<string, Promise<void>>();
   private readonly usageRetryAt = new Map<string, number>();
   private readonly identityCheckedAt = new Map<string, number>();
+  /** Accounts whose stored sign-in the provider rejects: they need signing in again. */
+  private readonly expired = new Set<string>();
   private readonly activeAt = new Map<string, number>();
   private readonly availability = new Map<string, { ok: boolean; detail: string | null; at: number }>();
   private readonly baseLabels = new Map<string, string>();
@@ -225,7 +227,17 @@ export class Service {
     const account = findAccount(await this.store.read(), agent.provider);
     if (!account || account.envOnly) return;
     this.activeAt.set(account.id, Date.now());
+    const adapter = this.adapters[account.base];
+    if (adapter?.signInExpired) {
+      const expired = await adapter.signInExpired(account.home).catch(() => null);
+      if (expired !== null) this.setExpired(account.id, expired);
+    }
     void this.refreshUsage(account.id).catch(() => undefined);
+  }
+
+  private setExpired(accountId: string, expired: boolean): void {
+    if (expired) this.expired.add(accountId);
+    else this.expired.delete(accountId);
   }
 
   // ------------------------------------------------------------------ usage
@@ -244,11 +256,12 @@ export class Service {
       if (!account || !adapter || account.envOnly) return;
       if (since < (force ? adapter.usageSpacingMs : Math.max(adapter.usageSpacingMs, 60_000))) return;
       this.usageAttemptAt.set(accountId, Date.now());
-      const { retryAt, ...usage } = await adapter
+      const { retryAt, signInExpired, ...usage } = await adapter
         .usage(account.home, { renewLogin })
         .catch((error: unknown): UsageRead => ({ fetchedAt: new Date().toISOString(), windows: [], error: describe(error), cached: false }));
       if (retryAt) this.usageRetryAt.set(accountId, retryAt);
       else this.usageRetryAt.delete(accountId);
+      if (signInExpired !== undefined) this.setExpired(accountId, signInExpired);
       this.setUsage(accountId, mergeUsage(this.usage.get(accountId), usage));
     })().finally(() => this.usageInFlight.delete(accountId));
     this.usageInFlight.set(accountId, task);
@@ -294,7 +307,7 @@ export class Service {
           email: account.email,
           plan: account.plan,
           organization: account.organization,
-          status: !account.signedIn ? "signed_out" : full ? "limited" : "ready",
+          status: !account.signedIn ? "signed_out" : this.expired.has(account.id) ? "expired" : full ? "limited" : "ready",
           managedLogin: !account.envOnly,
           usage,
           home: account.home,
@@ -577,7 +590,10 @@ export class Service {
         return;
       }
     }
-    if (accountId) this.identityCheckedAt.set(accountId, Date.now());
+    if (accountId) {
+      this.identityCheckedAt.set(accountId, Date.now());
+      this.expired.delete(accountId);
+    }
     session.accountId = accountId;
     session.view = { ...session.view, step: "done", accountId, message: null };
     if (accountId) void this.refreshUsage(accountId, true).catch(() => undefined);

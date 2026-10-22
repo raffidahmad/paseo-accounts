@@ -34,6 +34,8 @@ function isFresh(credentials: Credentials | null): credentials is Credentials {
   return Boolean(credentials?.accessToken) && (!credentials?.expiresAt || credentials.expiresAt > Date.now() + 60_000);
 }
 
+const SIGN_IN_EXPIRED = "This account's sign-in has expired. Sign in again to keep using it.";
+
 function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -90,7 +92,13 @@ export class ClaudeAdapter implements ProviderAdapter {
   async usage(home: string | null, options: { renewLogin?: boolean } = {}): Promise<UsageRead> {
     const fetchedAt = new Date().toISOString();
     let credentials = await readCredentials(home).catch(() => null);
-    if (!isFresh(credentials) && options.renewLogin) credentials = await this.renewLogin(home);
+    if (!isFresh(credentials) && options.renewLogin) {
+      credentials = await this.renewLogin(home);
+      // Claude Code couldn't renew it either: the sign-in itself has expired or been revoked.
+      if (credentials?.accessToken && !isFresh(credentials)) {
+        return { fetchedAt, windows: [], error: SIGN_IN_EXPIRED, cached: false, signInExpired: true };
+      }
+    }
     const profileScope = !credentials?.scopes || credentials.scopes.includes("user:profile");
     if (credentials?.accessToken && isFresh(credentials) && profileScope) {
       try {
@@ -99,8 +107,10 @@ export class ClaudeAdapter implements ProviderAdapter {
           signal: AbortSignal.timeout(15_000),
         });
         if (response.ok) {
-          return { fetchedAt, windows: parseUsage(await response.json()), error: null, cached: false };
+          return { fetchedAt, windows: parseUsage(await response.json()), error: null, cached: false, signInExpired: false };
         }
+        // A token that hasn't run out yet but is refused has been revoked.
+        if (response.status === 401) return { fetchedAt, windows: [], error: SIGN_IN_EXPIRED, cached: false, signInExpired: true };
         // Anthropic rate-limits this endpoint (Claude Code and Paseo read it too). Wait as long as it
         // asks; meanwhile the last reading stays up, or Claude Code's own cached copy if it's newer.
         if (response.status === 429) {
@@ -120,6 +130,13 @@ export class ClaudeAdapter implements ProviderAdapter {
     const cached = await cachedUsage(home);
     if (cached) return cached;
     return { fetchedAt, windows: [], error: "Usage shows up after this account is next used.", cached: false };
+  }
+
+  /** Claude Code renews its token whenever it runs, so one still past its expiry after a turn couldn't be renewed. */
+  async signInExpired(home: string | null): Promise<boolean | null> {
+    const credentials = await readCredentials(home).catch(() => null);
+    if (!credentials?.accessToken || !credentials.expiresAt) return null;
+    return credentials.expiresAt <= Date.now();
   }
 
   /**
