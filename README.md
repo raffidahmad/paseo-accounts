@@ -19,10 +19,10 @@ Requirements:
 - Paseo 0.9.1 or later, with plugins enabled (**Settings → Plugins → Enable plugins**).
 - For Claude and ChatGPT accounts: the `claude` and/or `codex` CLI installed where the daemon runs, the same ones Paseo already uses.
 
-In the app, open **Settings → Plugins**, paste `npm:@raffidahmad/paseo-accounts` as the plugin source, and install. Or, on the daemon host:
+In the app, open **Settings → Plugins**, paste `npm:paseo-accounts` as the plugin source, and install. Or, on the daemon host:
 
 ```bash
-paseo plugin install npm:@raffidahmad/paseo-accounts
+paseo plugin install npm:paseo-accounts
 # or straight from GitHub:
 paseo plugin install github:raffidahmad/paseo-accounts
 ```
