@@ -1,0 +1,34 @@
+# Publishes each release to GitHub Packages, so it shows under "Packages" on the repo page.
+# GitHub's npm registry needs a name scoped to the repo owner, so it goes up as
+# @raffidahmad/paseo-accounts; npmjs.com has it unscoped as paseo-accounts.
+name: Publish to GitHub Packages
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://npm.pkg.github.com
+          scope: "@raffidahmad"
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - name: Publish as @raffidahmad/paseo-accounts
+        run: |
+          npm pkg set name=@raffidahmad/paseo-accounts
+          npm pkg delete publishConfig
+          npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
