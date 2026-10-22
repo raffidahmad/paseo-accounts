@@ -29,7 +29,14 @@ export const AccountKindSchema = z.enum([
 ]);
 export type AccountKind = z.infer<typeof AccountKindSchema>;
 
-export const AccountStatusSchema = z.enum(["ready", "signed_out", "limited", "checking"]);
+export const AccountStatusSchema = z.enum([
+  "ready",
+  "signed_out",
+  /** Still has a stored sign-in, but the provider rejects it and the CLI couldn't renew it. */
+  "expired",
+  "limited",
+  "checking",
+]);
 export type AccountStatus = z.infer<typeof AccountStatusSchema>;
 
 export const AccountViewSchema = z.object({

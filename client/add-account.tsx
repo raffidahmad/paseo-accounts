@@ -135,8 +135,9 @@ export function AddAccountModal({
       <>
         <Text style={text.heading}>You're signed in</Text>
         <Text style={text.body}>
-          {who} is ready{multiHost ? ` on ${host.label}` : ""}. It's now a provider in Paseo: pick it when you start a chat
-          to choose its models, or use its profile.
+          {accountId
+            ? `${who} is signed in again${multiHost ? ` on ${host.label}` : ""}. Chats that were already open keep their old sign-in: start a new chat, or reopen them.`
+            : `${who} is ready${multiHost ? ` on ${host.label}` : ""}. It's now a provider in Paseo: pick it when you start a chat to choose its models, or use its profile.`}
         </Text>
         <Row>
           <Button theme={theme} tone="primary" label="Done" tooltip="Close this window" tooltipAlign="end" onPress={onClose} />

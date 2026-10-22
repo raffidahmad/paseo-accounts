@@ -7,6 +7,7 @@ import {
   type ProviderAdapter,
   type Identity,
   type LoginHandle,
+  type UsageRead,
 } from "./adapter";
 import { providerCommand } from "./binaries";
 import { codexSqliteHome, prepareCodexHome } from "./homes";
@@ -151,8 +152,11 @@ class AppServer {
 
 interface Snapshot {
   identity: Identity;
-  usage: Usage;
+  usage: UsageRead;
 }
+
+/** Codex's wording when its stored ChatGPT sign-in can't be refreshed any more. */
+const EXPIRED_SIGN_IN = /401|unauthori[sz]ed|refresh token|token (has )?expired|sign in again|log ?in again|re-?authenticate/i;
 
 export class CodexAdapter implements ProviderAdapter {
   readonly base = "codex";
@@ -184,7 +188,7 @@ export class CodexAdapter implements ProviderAdapter {
     return (await this.snapshot(home)).identity;
   }
 
-  async usage(home: string | null): Promise<Usage> {
+  async usage(home: string | null): Promise<UsageRead> {
     return (await this.snapshot(home, true)).usage;
   }
 
@@ -219,7 +223,7 @@ export class CodexAdapter implements ProviderAdapter {
       }
       const email = typeof details.email === "string" ? details.email : null;
       const plan = typeof details.planType === "string" ? details.planType : null;
-      let usage: Usage;
+      let usage: UsageRead;
       let accountId: string | null = null;
       try {
         const limits = (await server.request("account/rateLimits/read", { excludeResetCreditDetails: true })) as Json;
@@ -229,9 +233,18 @@ export class CodexAdapter implements ProviderAdapter {
           windows: parseRateLimits(limits.rateLimits),
           error: null,
           cached: false,
+          signInExpired: false,
         };
       } catch (error) {
-        usage = { fetchedAt, windows: [], error: error instanceof Error ? error.message : String(error), cached: false };
+        const message = error instanceof Error ? error.message : String(error);
+        const expired = EXPIRED_SIGN_IN.test(message);
+        usage = {
+          fetchedAt,
+          windows: [],
+          error: expired ? "This account's sign-in has expired. Sign in again to keep using it." : message,
+          cached: false,
+          ...(expired ? { signInExpired: true } : {}),
+        };
       }
       return {
         identity: {
