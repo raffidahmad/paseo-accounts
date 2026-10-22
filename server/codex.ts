@@ -55,7 +55,7 @@ class AppServer {
     try {
       await server.request(
         "initialize",
-        { clientInfo: { name: CLIENT_NAME, title: "Paseo Accounts", version: "2.0.0" }, capabilities: { experimentalApi: false } },
+        { clientInfo: { name: CLIENT_NAME, title: "Paseo Accounts", version: "2.1.0" }, capabilities: { experimentalApi: false } },
         60_000,
       );
       server.send({ method: "initialized" });
