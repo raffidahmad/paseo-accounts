@@ -1,6 +1,6 @@
 {
   "name": "paseo-accounts",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Paseo Accounts (formerly ZeroSub): add more accounts to any Paseo provider. Each account becomes its own provider (and profile), with in-app sign-in and usage for Claude and ChatGPT (Codex).",
   "keywords": [
     "zerosub",
